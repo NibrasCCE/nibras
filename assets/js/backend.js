@@ -72,6 +72,7 @@ function LocalStore(){
     async deleteMe(){const u=me();if(!u)return;for(const p of Object.values(DB.users))if(p.children)p.children=p.children.filter(id=>id!==u.id);delete DB.users[u.id];DB.session=null;persist();},
     parentCount(){const u=me();return u?Object.values(DB.users).filter(p=>p.role==="parent"&&(p.children||[]).includes(u.id)).length:0;},
     async refreshParents(){return this.parentCount();},
+    async notify(){return{ok:false,skipped:true};}, /* local demo: nothing is sent */
     async kids(){const u=me();return(u.children||[]).map(id=>DB.users[id]).filter(Boolean).map(s=>({id:s.id,nick:s.nick,avatar:s.avatar,progress:s.progress,linkedAt:(u.linkedAt||{})[s.id]||u.created}));},
     async link(code){return linkTo(me(),code);},
     async unlink(id){const u=me();u.children=(u.children||[]).filter(x=>x!==id);persist();return{ok:true};}
@@ -157,6 +158,21 @@ function SupabaseStore(){
       if(!profile||profile.role!=="student")return 0;
       const {count,error}=await sb.from("links").select("parent_id",{count:"exact",head:true}).eq("student_id",profile.id);
       if(!error)pcount=count||0;return pcount;
+    },
+    /* e-mail the linked parents through the "nibras-notify" Edge Function.
+       Never throws: a failed notification must not interrupt the student. */
+    async notify(kind,subject,body){
+      if(CFG.NOTIFY_ENABLED===false||!profile||profile.role!=="student")return{ok:false,skipped:true};
+      try{
+        const {data:{session}}=await sb.auth.getSession();
+        if(!session)return{ok:false};
+        const res=await fetch(CFG.SUPABASE_URL.replace(/\/$/,"")+"/functions/v1/"+(CFG.NOTIFY_FUNCTION||"nibras-notify"),{method:"POST",
+          headers:{"Content-Type":"application/json",apikey:CFG.SUPABASE_KEY,Authorization:"Bearer "+session.access_token},
+          body:JSON.stringify({kind,subject,body})});
+        let j={};try{j=await res.json();}catch(e){}
+        if(!res.ok||j.failed)console.warn("[nibras-notify]",res.status,j.error||"",j.message||"",j.failed?("failed: "+j.failed):"");
+        return{ok:res.ok,sent:j.sent||0,failed:j.failed||0};
+      }catch(e){console.warn("[nibras-notify]",String(e));return{ok:false};}
     },
     async kids(){
       const {data:links,error}=await sb.from("links").select("student_id,created_at").eq("parent_id",profile.id);

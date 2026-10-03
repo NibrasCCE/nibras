@@ -213,7 +213,8 @@ function composeMsg(stu,kind,extra,ch){
   return{subject,body:lines.join("\n")};
 }
 /* The parent's message list is built from the student's own progress events.
-   Nothing is sent by e-mail/SMS in this version (that needs a sending service). */
+   With real accounts (Supabase) the same message is also sent by e-mail through the
+   "nibras-notify" Edge Function (see notifyParents below). SMS is still simulated. */
 function buildOutbox(par,kids){
   const pr=par.prefs||{},ch=pr.channel==="sms"?"sms":"email",to=ch==="sms"?(pr.phone||""):(pr.email||"");
   const out=[];
@@ -235,6 +236,16 @@ function buildOutbox(par,kids){
   return out.sort((a,b)=>t(b.at)-t(a.at)).slice(0,30);
 }
 function logEvent(kind,extra){S.events=S.events||[];S.events.push(Object.assign({at:new Date().toISOString(),kind},extra||{}));S.events=S.events.slice(-80);}
+/* Real e-mail to the linked parents. The server finds the parents and respects their
+   settings; the student never sees a parent's address. Fails quietly (see the console). */
+function notifyParents(kind,extra){
+  try{
+    if(typeof Store.notify!=="function")return;
+    const u=ME();if(!u||u.role!=="student"||!S)return;
+    const m=composeMsg({nick:u.nick,progress:S},kind,extra||{},"email");
+    if(m&&m.subject&&m.body)Store.notify(kind,m.subject,m.body);
+  }catch(e){console.warn("[nibras-notify]",e);}
+}
 function markLit(sid){
   if(S.lit[sid])return;
   S.lit[sid]=true;const s=skillById[sid];
@@ -243,7 +254,8 @@ function markLit(sid){
   if(SK_LV[s.lv].every(id=>isLit(id))&&!S.events.some(e=>e.kind==="level"&&e.level===s.lv)){
     logEvent("level",{level:s.lv});
     setTimeout(()=>toast("أنهيت "+LV[s.lv].name+"!"),2700);
-  }
+    notifyParents("level",{level:s.lv}); /* one e-mail for the level, not a second one for its last skill */
+  }else notifyParents("skill",{skill:sid});
   save();
 }
 
@@ -614,6 +626,7 @@ async function endGame(){
   S.diag={at:new Date().toISOString(),skills,lvPass:g.lvPass,trail:g.trail,start:start?start.id:null,mis,count:g.asked.length,
     answers:g.asked.map(a=>({qid:a.qid,a:a.a,ok:a.ok,mis:a.mis,src:a.src,why:a.why||""})),report:""};
   logEvent("diag");
+  notifyParents("diag");
   S.diag.sentTo=Store.parentCount();
   save();G=null;REP.busy=false;REP.fail=null;beep("win");
   if(route()==="result")vResult();else location.hash="#result";
@@ -841,8 +854,8 @@ function vParent(){
       <div><button class="btn btn-go btn-sm" id="savep" type="button">احفظ الإعدادات</button></div>
     </div>
     <div class="card" style="display:grid;gap:12px">
-      <div class="row between"><h3>الرسائل</h3><span class="chip plain">محاكاة</span></div>
-      <div class="notice">${IC_INFO}<span>بهاي النسخة الرسائل بتظهر هون بس، وما بتنبعت فعلياً بالإيميل أو SMS. الإرسال الحقيقي بيحتاج خدمة إرسال (مرحلة جاية).</span></div>
+      <div class="row between"><h3>الرسائل</h3>${Store.mode==="local"?`<span class="chip plain">محاكاة</span>`:""}</div>
+      <div class="notice">${IC_INFO}<span>${Store.mode==="local"?"بهاي النسخة الرسائل بتظهر هون بس، وما بتنبعت فعلياً بالإيميل أو SMS. الإرسال الحقيقي بيحتاج خدمة إرسال (مرحلة جاية).":"الرسائل بتظهر هون، وإشعارات الإيميل بتنبعت كمان على إيميلك إذا خدمة الإرسال مفعّلة على الخادم. رسائل SMS لسا محاكاة وما بتنبعت."}</span></div>
       ${outbox.length?outbox.slice(0,20).map(m=>`<div class="msgitem">
         <div class="msgmeta"><span class="chip ${m.channel==="sms"?"calm":"lit"}">${m.channel==="sms"?"SMS":"إيميل"}</span><span>إلى: <span dir="ltr">${esc(m.to||"(ما في عنوان، أضفه بالإعدادات)")}</span></span><span>${fmtTime(m.at)}</span></div>
         ${m.channel==="email"?`<b>${esc(m.subject)}</b>`:""}

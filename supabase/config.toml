@@ -2,3 +2,6 @@
 # The function checks the user's login itself, so the gateway JWT check is off.
 [functions.nibras-ai]
 verify_jwt = false
+
+[functions.nibras-notify]
+verify_jwt = false
