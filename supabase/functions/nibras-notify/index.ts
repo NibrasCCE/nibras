@@ -150,8 +150,12 @@ Deno.serve(async (req: Request) => {
         body: JSON.stringify({ from: MAIL_FROM, to: [email], subject, text }),
         signal: AbortSignal.timeout(20_000),
       });
-      if (res.ok) sent++;
-      else {
+      if (res.ok) {
+        sent++;
+        // the id lets you find this e-mail in the Resend dashboard (Emails)
+        const ok = await res.json().catch(() => ({}));
+        console.log("[nibras-notify] accepted by Resend", kind, "id:", String(ok?.id ?? "?"));
+      } else {
         failed++;
         // details stay in the function logs (Edge Functions → nibras-notify → Logs), not in the browser
         const detail = await res.text().catch(() => "");
@@ -162,5 +166,6 @@ Deno.serve(async (req: Request) => {
       console.error("[nibras-notify] send error", String(e));
     }
   }
+  console.log("[nibras-notify] done", kind, JSON.stringify({ sent, failed, skipped, parents: ids.length }));
   return reply(req, 200, { sent, failed, skipped, parents: ids.length });
 });
