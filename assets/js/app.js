@@ -150,9 +150,16 @@ function avatar(id){
 const FROG='<svg viewBox="0 0 52 52" aria-hidden="true"><ellipse cx="26" cy="36" rx="18" ry="12" fill="#4CAF50"/><circle cx="17" cy="22" r="8" fill="#4CAF50"/><circle cx="35" cy="22" r="8" fill="#4CAF50"/><circle cx="17" cy="22" r="4.5" fill="#fff"/><circle cx="35" cy="22" r="4.5" fill="#fff"/><circle cx="18" cy="22" r="2.2" fill="#14234F"/><circle cx="34" cy="22" r="2.2" fill="#14234F"/><path d="M19 38q7 5 14 0" fill="none" stroke="#14234F" stroke-width="2" stroke-linecap="round"/></svg>';
 
 /* ---------- accounts: window.Store (backend.js) = local demo OR Supabase ---------- */
-let S=null,READY=false;
+let S=null,READY=false,GUEST_S=null;
 const ME=()=>Store.me();
-function bindSession(){const u=ME();S=u&&u.role==="student"?Store.progress():null;}
+/* guest teacher: tries the chat only; nothing is saved (the conversation lives in memory) */
+const isGuest=()=>{const u=ME();return !!(u&&u.role==="teacher");};
+const guestProgress=()=>({diag:null,lit:{},streak:{},detected:{},chat:{turns:[],day:"",count:0},events:[]});
+function bindSession(){
+  const u=ME();
+  if(u&&u.role==="teacher"){S=GUEST_S||(GUEST_S=guestProgress());return;}
+  GUEST_S=null;S=u&&u.role==="student"?Store.progress():null;
+}
 const save=()=>Store.save();
 function parseIdent(raw){
   const s=String(raw||"").trim().replace(/[٠-٩]/g,d=>String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
@@ -280,15 +287,16 @@ function renderNav(){
   if(!u){me.hidden=true;return;}
   me.hidden=false;
   if(u.role==="student"){me.innerHTML=`<span class="avatar-sm">${avatar(u.avatar)}</span><span>${esc(u.nick)}</span>`;me.onclick=()=>{location.hash="#me";};}
-  else{me.innerHTML=`<span class="dot">${esc((u.name||"و").slice(0,1))}</span><span>خروج</span>`;me.onclick=logout;}
+  else{me.innerHTML=`<span class="dot">${esc((u.name||(u.role==="teacher"?"م":"و")).slice(0,1))}</span><span>خروج</span>`;me.onclick=logout;}
 }
-async function logout(){if(CHAT.ctl)CHAT.ctl.abort();await Store.logout();S=null;G=null;P=null;PV.kids=null;PV.err="";CHAT.err="";REP.fail=null;location.hash="#home";render();toast("سجّلت خروج");}
+async function logout(){if(CHAT.ctl)CHAT.ctl.abort();if(isGuest()&&typeof Store.endGuest==="function")await Store.endGuest();else await Store.logout();S=null;GUEST_S=null;G=null;P=null;PV.kids=null;PV.err="";CHAT.err="";REP.fail=null;location.hash="#home";render();toast("سجّلت خروج");}
 function render(){
   if(!READY)return;
   bindSession();renderNav();
   const u=ME(),r=route();
   if(!u){if(r==="auth-student")return vAuth("student");if(r==="auth-parent")return vAuth("parent");return vLanding();}
   if(u.role==="parent")return vParent();
+  if(u.role==="teacher"){if(r!=="ask"){location.hash="#ask";return;}return vAsk();} /* guest teacher: chat only */
   if(r.startsWith("skill-")&&skillById[r.slice(6)])return vSkill(r.slice(6));
   ({home:vHome,play:vPlay,result:vResult,path:vPath,ask:vAsk,me:vMe}[r]||vHome)();
 }
@@ -298,6 +306,7 @@ window.addEventListener("hashchange",()=>{if(G&&route()!=="play")G=null;if(P&&!r
 const IC_KID='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="3.5"/><path d="M6 21v-3a6 6 0 0 1 12 0v3"/><path d="M9 14l3 3 3-3"/></svg>';
 const IC_PAR='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="7" r="3"/><circle cx="17" cy="9" r="2.3"/><path d="M2.5 20c.6-3.4 2.7-5.5 5.5-5.5s4.9 2.1 5.5 5.5M14 20c.4-2.6 1.6-4.2 3.2-4.2s2.9 1.6 3.3 4.2"/></svg>';
 const IC_INFO='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/></svg>';
+const IC_TEACH='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M7 8.5h7M7 11.5h4M12 16v4M8 20h8"/></svg>';
 function vLanding(){
   app.innerHTML=`<section class="view">
     <div class="hero">
@@ -307,6 +316,7 @@ function vLanding(){
       <div class="roles">
         <a class="rolebtn primary" href="#auth-student">${IC_KID}<b>دخول الطلاب</b><span>العب واكتشف مستواك</span></a>
         <a class="rolebtn" href="#auth-parent">${IC_PAR}<b>دخول الأهالي</b><span>تابع تقارير ابنك أو بنتك</span></a>
+        <button class="rolebtn" id="guest-teacher" type="button" style="grid-column:1/-1;font:inherit;cursor:pointer">${IC_TEACH}<b>دخول المعلمين (زائر)</b><span>جرّب المعلم الافتراضي «نبراس» بدون حساب</span></button>
       </div>
     </div>
     <div class="steps">
@@ -316,6 +326,20 @@ function vLanding(){
     </div>
     <p class="draft">نموذج أولي · مهارات الأعداد والجبر من كتب الرياضيات للصفوف 5–7 (المنهاج الفلسطيني) · المحتوى مسودة بانتظار مراجعة معلم${Store.mode==="local"?" · وضع تجريبي محلي: الحسابات محفوظة على هذا الجهاز فقط":""}</p>
   </section>`;
+  const gb=$("#guest-teacher");if(gb)gb.onclick=guestTeacher;
+}
+/* guest teacher: one click, no account form. Opens the chat only. */
+let GUEST_BUSY=false;
+async function guestTeacher(){
+  if(GUEST_BUSY)return;GUEST_BUSY=true;
+  const b=$("#guest-teacher");if(b)b.disabled=true;
+  let r;
+  try{r=typeof Store.guestTeacher==="function"?await Store.guestTeacher():{ok:false,err:"دخول الزوّار مش متاح بهذا العرض."};}
+  catch(e){console.error(e);r={ok:false,err:"ما قدرنا نوصل للخادم. تأكد من الإنترنت وجرّب مرة ثانية."};}
+  GUEST_BUSY=false;
+  if(!r||!r.ok){toast(r&&r.err||"صار خطأ.");const b2=$("#guest-teacher");if(b2)b2.disabled=false;return;}
+  beep("ding");CHAT.err="";
+  if(location.hash==="#ask")render();else location.hash="#ask";
 }
 
 /* ---------- auth (demo accounts on this device) ---------- */
@@ -958,8 +982,11 @@ const CHAT={busy:false,stream:"",ctl:null,err:"",file:null,prefill:""};
 function refreshAI(){if(!READY)return;const r=route();if(!S)return;if(r==="ask")drawChat();else if(r==="result")vResult();else if(r==="play"&&G)drawGame();}
 NibrasAI.get().then(s=>{sampleFn=s||null;if(s&&s.limits)s.limits().then(l=>{imgOK=!!(l&&l.images);if(READY&&route()==="ask"&&S)drawChat();}).catch(()=>{});refreshAI();}).catch(()=>{sampleFn=null;refreshAI();});
 function context(){
-  const d=S.diag,L=["# سياق الطالب",`- الاسم المستعار: ${ME().nick} (لا تطلب اسمه الحقيقي)`,"- الصف: السابع"];
-  if(d){L.push("- نتيجة التشخيص: "+SKILLS.map(s=>`${s.title} (${LV[s.lv].short}) = ${STATUS[d.skills[s.id]][0]}`).join("؛ "));
+  const g=isGuest();
+  const d=S.diag,L=g?["# سياق الجلسة","- هذه جلسة تجريبية: الزائر معلم يختبر نبراس، وقد يكتب كأنه طالب. تصرّف تماماً كما تتصرف مع طالب في الصف السابع، بنفس طريقة التعليم والحدود.","- لا تقترح لعبة التشخيص ولا المسار، فالزائر ليس له حساب طالب.","- الصف المفترض: السابع"]
+    :["# سياق الطالب",`- الاسم المستعار: ${ME().nick} (لا تطلب اسمه الحقيقي)`,"- الصف: السابع"];
+  if(g){/* no diagnostic data for a guest */}
+  else if(d){L.push("- نتيجة التشخيص: "+SKILLS.map(s=>`${s.title} (${LV[s.lv].short}) = ${STATUS[d.skills[s.id]][0]}`).join("؛ "));
     const c=currentSkill();L.push(`- المحطة الحالية في مساره: ${c?c.title+" ("+LV[c.lv].name+")":"أتقن كل المهارات"}`);}
   else L.push("- لم يلعب التشخيص بعد. إذا طلب مساعدة عامة اقترح عليه لعبة التشخيص بلطف.");
   const det=Object.entries(S.detected).sort((a,b)=>b[1]-a[1]).map(([id,n])=>`${id} (${n})`);
@@ -1010,10 +1037,13 @@ function drawChat(){
   const off=sampleFn===null,loading=sampleFn===undefined;
   const draft=$("#cin")?$("#cin").value:"";
   const turns=S.chat.turns;
-  const welcome=`أهلاً ${ME().nick}! أنا نبراس. احكيلي شو السؤال اللي محيّرك، وبنفكّر فيه سوا خطوة خطوة. ما رح أعطيك الحل جاهز، بس رح أضل معك لحد ما توصل.`;
+  const guest=isGuest();
+  const welcome=guest?`أهلاً! أنا نبراس، المعلم الافتراضي. اسألني سؤال رياضيات كأنك طالب بالصف السابع، وشوف كيف بفكّر معك خطوة خطوة بدل ما أعطيك الحل جاهز.`
+    :`أهلاً ${ME().nick}! أنا نبراس. احكيلي شو السؤال اللي محيّرك، وبنفكّر فيه سوا خطوة خطوة. ما رح أعطيك الحل جاهز، بس رح أضل معك لحد ما توصل.`;
   app.innerHTML=`<section class="view">
+    ${guest?`<div class="notice">${IC_INFO}<span><b>وضع المعلم الزائر.</b> بتجرّب المعلم الافتراضي كما بيشوفه الطالب. المحادثة ما بتنحفظ، وبتنمسح لما تطلع أو تحدّث الصفحة. للخروج اضغط «خروج» فوق.</span></div>`:""}
     <div class="chat">
-      <div class="chat-head"><span class="appicon">${ICON}</span><div style="flex:1;min-width:0"><b style="color:var(--logo)">نبراس</b><div class="tiny">${loading?"بيجهّز…":off?"مش متاح بهذا العرض":CHAT.busy?"بيكتب…":"معلمك الافتراضي"}</div></div>
+      <div class="chat-head"><span class="appicon">${ICON}</span><div style="flex:1;min-width:0"><b style="color:var(--logo)">نبراس</b><div class="tiny">${loading?"بيجهّز…":off?"مش متاح بهذا العرض":CHAT.busy?"بيكتب…":guest?"المعلم الافتراضي":"معلمك الافتراضي"}</div></div>
         ${turns.length?`<button class="btn btn-line btn-sm" id="clr" type="button">محادثة جديدة</button>`:""}</div>
       <div class="msgs" id="msgs" aria-live="polite">
         <div class="msg bot">${md(welcome)}</div>
@@ -1022,7 +1052,7 @@ function drawChat(){
       </div>
       ${!turns.length&&!off?`<div class="suggest">${["ما فهمت قسمة الكسور","ليش −4 − 3 = −7؟","كيف بحل 2x − 3 = 11؟"].map(s=>`<button type="button" data-s="${esc(s)}">${mathify(s)}</button>`).join("")}</div>`:""}
       ${CHAT.err?`<div class="note" role="alert">${esc(CHAT.err)}</div>`:""}
-      ${off?`<div class="note">${Store.mode==="local"?"نبراس (الذكاء الاصطناعي) بيشتغل بس لما الموقع يكون موصول بـ Supabase. بتقدر تكمل اللعبة والمسار عادي.":"نبراس مطفي حالياً. بتقدر تكمل اللعبة والمسار عادي."}</div>`:""}
+      ${off?`<div class="note">${guest?"نبراس مطفي حالياً، فما في إشي تجرّبه هلأ. جرّب بوقت ثاني.":Store.mode==="local"?"نبراس (الذكاء الاصطناعي) بيشتغل بس لما الموقع يكون موصول بـ Supabase. بتقدر تكمل اللعبة والمسار عادي.":"نبراس مطفي حالياً. بتقدر تكمل اللعبة والمسار عادي."}</div>`:""}
       ${CHAT.file?`<div class="note">📷 مرفق: ${esc(CHAT.file.name||"صورة")} <button class="btn btn-line btn-sm" id="rmf" type="button">إزالة</button></div>`:""}
       <form class="composer" id="cf">
         ${imgOK&&!off?`<label class="iconbtn" title="صوّر حلّك وأرسله" aria-label="أرفق صورة لحلّك"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><input id="cimg" type="file" accept="image/*" hidden></label>`:""}
@@ -1031,7 +1061,7 @@ function drawChat(){
         `<button class="iconbtn send" type="submit" aria-label="أرسل" ${off||loading?"disabled":""}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H5M11 6l-6 6 6 6"/></svg></button>`}
       </form>
     </div>
-    <p class="draft">نبراس نموذج ذكاء اصطناعي وممكن يغلط. ${Store.mode==="local"?"المحادثة محفوظة على هذا الجهاز فقط.":"المحادثة محفوظة بحسابك."} ${DAILY_LIMIT} رسالة باليوم.</p>
+    <p class="draft">نبراس نموذج ذكاء اصطناعي وممكن يغلط. ${guest?"المحادثة ما بتنحفظ. عدد الرسائل باليوم محدود.":(Store.mode==="local"?"المحادثة محفوظة على هذا الجهاز فقط.":"المحادثة محفوظة بحسابك.")+" "+DAILY_LIMIT+" رسالة باليوم."}</p>
   </section>`;
   const cin=$("#cin");
   cin.value=CHAT.prefill||draft;CHAT.prefill="";

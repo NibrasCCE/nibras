@@ -73,6 +73,9 @@ function LocalStore(){
     parentCount(){const u=me();return u?Object.values(DB.users).filter(p=>p.role==="parent"&&(p.children||[]).includes(u.id)).length:0;},
     async refreshParents(){return this.parentCount();},
     async notify(){return{ok:false,skipped:true};}, /* local demo: nothing is sent */
+    /* the guest teacher only tries the AI chat, and AI needs Supabase */
+    async guestTeacher(){return{ok:false,err:"تجربة المعلم الزائر بتحتاج الموقع موصول بـ Supabase، لأنه الذكاء الاصطناعي ما بيشتغل بالوضع التجريبي المحلي."};},
+    async endGuest(){DB.session=null;persist();},
     async kids(){const u=me();return(u.children||[]).map(id=>DB.users[id]).filter(Boolean).map(s=>({id:s.id,nick:s.nick,avatar:s.avatar,progress:s.progress,linkedAt:(u.linkedAt||{})[s.id]||u.created}));},
     async link(code){return linkTo(me(),code);},
     async unlink(id){const u=me();u.children=(u.children||[]).filter(x=>x!==id);persist();return{ok:true};}
@@ -150,6 +153,28 @@ function SupabaseStore(){
       return{ok:true};
     },
     async logout(){clearTimeout(saveT);await saving;await sb.auth.signOut();profile=null;prog=null;},
+    /* Guest teacher: an anonymous Supabase user with role "teacher" (no e-mail, no password).
+       Needs «Allow anonymous sign-ins» in Supabase and migration 0002_teacher_guest.sql. */
+    async guestTeacher(){
+      const {error}=await sb.auth.signInAnonymously({options:{data:{role:"teacher",name:"معلم زائر"}}});
+      if(error){
+        const c=error.code||error.error_code||"",m=String(error.message||"").toLowerCase();
+        if(c==="anonymous_provider_disabled"||m.includes("anonymous"))return{ok:false,err:"دخول الزوّار مش مفعّل على الخادم. (للفريق: فعّلوا «Allow anonymous sign-ins» بإعدادات Supabase، شوف الدليل.)"};
+        return{ok:false,err:authErr(error)};
+      }
+      const p=await loadMe();
+      if(!p||p.role!=="teacher"){
+        try{await sb.rpc("delete_me");}catch(e){}
+        await sb.auth.signOut();profile=null;prog=null;
+        return{ok:false,err:"حساب الزائر ما انعمل صح. (للفريق: شغّلوا ملف قاعدة البيانات 0002_teacher_guest.sql، شوف الدليل.)"};
+      }
+      return{ok:true};
+    },
+    /* leaving removes the temporary guest user so the database does not fill up with visitors */
+    async endGuest(){
+      try{if(profile&&profile.role==="teacher")await sb.rpc("delete_me");}catch(e){}
+      await sb.auth.signOut();profile=null;prog=null;
+    },
     async updateMe(p){const {error}=await sb.from("profiles").update(p).eq("id",profile.id);if(error)return{ok:false,err:error.message};Object.assign(profile,p);return{ok:true};},
     async updatePrefs(p){const prefs=Object.assign({},profile.prefs,p);const {error}=await sb.from("profiles").update({prefs}).eq("id",profile.id);if(error)return{ok:false,err:error.message};profile.prefs=prefs;return{ok:true};},
     async deleteMe(){const {error}=await sb.rpc("delete_me");await sb.auth.signOut();profile=null;prog=null;if(error)onErr("ما انحذف الحساب: "+error.message);},
