@@ -9,12 +9,12 @@
    ===================================================================== */
 window.NIBRAS_CONFIG = {
   // Supabase → Project Settings → API (أو Connect) → Project URL
-  SUPABASE_URL: "",
+  SUPABASE_URL: "https://dnfbpruesbharetqwrjk.supabase.co",
 
   // Supabase → Project Settings → API Keys → Publishable key (sb_publishable_...)
   // أو المفتاح القديم anon public
-  SUPABASE_KEY: "",
-
+  SUPABASE_KEY: "sb_publishable_wAn5PcNNWrXKOfZ12PpLwQ_wI98OV9W",
+  
   // اسم الـ Edge Function اللي بتحكي مع Claude
   AI_FUNCTION: "nibras-ai",
 
