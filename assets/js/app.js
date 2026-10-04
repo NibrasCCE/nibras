@@ -1059,7 +1059,30 @@ ${AR_MATH?`- اكتب الرياضيات بترميز الكتاب المدرس�
 # وسم خفي (للنظام فقط)
 إذا لاحظت في كلام الطالب خطأً مفاهيمياً من المكتبة، أضف في آخر ردك وفي سطر منفصل: <<misconception:ID>> (مثل m03). لا تشرح الوسم ولا تذكره.`;
 let sampleFn,imgOK=false;
-const CHAT={busy:false,stream:"",ctl:null,err:"",file:null,prefill:""};
+const CHAT={busy:false,stream:"",ctl:null,err:"",file:null,prefill:"",pad:null};
+/* ---------- maths keyboard (chat): digits, operations and symbols in the school notation ----------
+   Opened with the «١٢٣» button. While it is open the phone keyboard stays closed (inputmode="none");
+   «أ ب ج» gives the phone keyboard back. On a computer both work together.
+   Each key: t = text put at the cursor · lab/html = what the key shows · cap = small caption. */
+const PAD_KEY="nibras.pad";
+function padDefault(){try{const v=localStorage.getItem(PAD_KEY);if(v==="1")return true;if(v==="0")return false;}catch(e){}return matchMedia("(pointer: fine)").matches&&innerWidth>=700;}
+function padRows(){
+  const d=n=>({t:arMath(String(n)),cls:"dig"}),v=c=>({t:arMath(c),cls:"sym"}),R=AR_MATH;
+  const open={t:"(",html:`<span dir="${R?"rtl":"ltr"}">(</span>`,cls:"sym"},close={t:")",html:`<span dir="${R?"rtl":"ltr"}">)</span>`,cls:"sym"};
+  const lt={t:" < ",html:`<span dir="${R?"rtl":"ltr"}">&lt;</span>`,cap:"أصغر من",cls:"sym"},gt={t:" > ",html:`<span dir="${R?"rtl":"ltr"}">&gt;</span>`,cap:"أكبر من",cls:"sym"};
+  return [
+    [...(R?[close,open,v("z"),v("y"),v("x")]:[v("x"),v("y"),v("z"),open,close]),{act:"del",html:"⌫",cap:"امسح",cls:"del"}],
+    [{t:"²",html:`<span dir="${R?"rtl":"ltr"}">▢<sup>${arMath("2")}</sup></span>`,cap:"تربيع",cls:"sym"},{t:"/",html:'<span class="frac"><span>▢</span><span>▢</span></span>',cap:"كسر",cls:"sym"},d(7),d(8),d(9),{t:" ÷ ",lab:"÷",cap:"قسمة",cls:"op"}],
+    [{t:"³",html:`<span dir="${R?"rtl":"ltr"}">▢<sup>${arMath("3")}</sup></span>`,cap:"تكعيب",cls:"sym"},{t:R?"٪":"%",cap:"بالمئة",cls:"sym"},d(4),d(5),d(6),{t:" × ",lab:"×",cap:"ضرب",cls:"op"}],
+    [{t:"√",cap:"جذر",cls:"sym"},{t:" : ",lab:":",cap:"نسبة",cls:"sym"},d(1),d(2),d(3),{t:"−",cap:"طرح",cls:"op"}],
+    [R?lt:gt,R?gt:lt,d(0),{t:R?"٫":".",cap:"فاصلة",cls:"dig"},{t:" = ",lab:"=",cap:"يساوي",cls:"op"},{t:" + ",lab:"+",cap:"جمع",cls:"op"}],
+    [{t:"|",cap:"قيمة مطلقة",cls:"sym"},{t:" ",lab:"مسافة",cls:"wide"},{act:"abc",lab:"أ ب ج",cls:"abc",cap:""}]
+  ];
+}
+function padHTML(){
+  return `<div class="mpadbox"><div class="mpad" id="mpad" role="group" aria-label="لوحة الأرقام والرموز">${padRows().map(r=>r.map(k=>
+    `<button type="button" class="${k.cls||""}" ${k.act?`data-act="${k.act}"`:`data-t="${esc(k.t)}"`} aria-label="${esc(k.cap||k.lab||k.t)}">${k.html||esc(k.lab||k.t)}${k.cap?`<small>${k.cap}</small>`:""}</button>`).join("")).join("")}</div></div>`;
+}
 function refreshAI(){if(!READY)return;const r=route();if(!S)return;if(r==="ask")drawChat();else if(r==="result")vResult();else if(r==="play"&&G)drawGame();}
 NibrasAI.get().then(s=>{sampleFn=s||null;if(s&&s.limits)s.limits().then(l=>{imgOK=!!(l&&l.images);if(READY&&route()==="ask"&&S)drawChat();}).catch(()=>{});refreshAI();}).catch(()=>{sampleFn=null;refreshAI();});
 function context(){
@@ -1119,11 +1142,13 @@ function drawChat(){
   const draft=$("#cin")?$("#cin").value:"";
   const turns=S.chat.turns;
   const guest=isGuest();
+  if(CHAT.pad===null)CHAT.pad=padDefault();
+  const pad=CHAT.pad&&!off;
   const welcome=guest?`أهلاً! أنا نبراس، المعلم الافتراضي. اسألني سؤال رياضيات كأنك طالب بالصف السابع، وشوف كيف بفكّر معك خطوة خطوة بدل ما أعطيك الحل جاهز.`
     :`أهلاً ${ME().nick}! أنا نبراس. احكيلي شو السؤال اللي محيّرك، وبنفكّر فيه سوا خطوة خطوة. ما رح أعطيك الحل جاهز، بس رح أضل معك لحد ما توصل.`;
   app.innerHTML=`<section class="view">
     ${guest?`<div class="notice">${IC_INFO}<span><b>وضع المعلم الزائر.</b> بتجرّب المعلم الافتراضي كما بيشوفه الطالب. المحادثة ما بتنحفظ، وبتنمسح لما تطلع أو تحدّث الصفحة. للخروج اضغط «خروج» فوق.</span></div>`:""}
-    <div class="chat">
+    <div class="chat ${pad?"pad-open":""}">
       <div class="chat-head"><span class="appicon">${ICON}</span><div style="flex:1;min-width:0"><b style="color:var(--logo)">نبراس</b><div class="tiny">${loading?"بيجهّز…":off?"مش متاح بهذا العرض":CHAT.busy?"بيكتب…":guest?"المعلم الافتراضي":"معلمك الافتراضي"}</div></div>
         ${turns.length?`<button class="btn btn-line btn-sm" id="clr" type="button">محادثة جديدة</button>`:""}</div>
       <div class="msgs" id="msgs" aria-live="polite">
@@ -1137,10 +1162,13 @@ function drawChat(){
       ${CHAT.file?`<div class="note">📷 مرفق: ${esc(CHAT.file.name||"صورة")} <button class="btn btn-line btn-sm" id="rmf" type="button">إزالة</button></div>`:""}
       <form class="composer" id="cf">
         ${imgOK&&!off?`<label class="iconbtn" title="صوّر حلّك وأرسله" aria-label="أرفق صورة لحلّك"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><input id="cimg" type="file" accept="image/*" hidden></label>`:""}
-        <textarea id="cin" rows="1" placeholder="اكتب سؤالك هون…" aria-label="رسالتك" ${off?"disabled":""}></textarea>
+        ${off?"":`<button class="iconbtn padt" id="padt" type="button" aria-pressed="${pad}" aria-label="${pad?"ارجع لكيبورد الجهاز":"افتح لوحة الأرقام والرموز"}" title="${pad?"كيبورد الجهاز":"لوحة الأرقام والرموز"}">${pad?"أ ب<small>حروف</small>":`${arMath("123")}<small>رموز</small>`}</button>`}
+        <textarea id="cin" rows="1" ${pad?'inputmode="none"':""} placeholder="${pad?"اكتب من اللوحة تحت…":"اكتب سؤالك هون…"}" aria-label="رسالتك" ${off?"disabled":""}></textarea>
         ${CHAT.busy?`<button class="iconbtn" id="stop" type="button" aria-label="أوقف"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>`:
         `<button class="iconbtn send" type="submit" aria-label="أرسل" ${off||loading?"disabled":""}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H5M11 6l-6 6 6 6"/></svg></button>`}
       </form>
+      <div class="mprev" id="mprev" hidden><span>هيك رح تظهر:</span><span id="mpv"></span></div>
+      ${pad?padHTML():""}
     </div>
     <p class="draft">نبراس نموذج ذكاء اصطناعي وممكن يغلط. ${guest?"المحادثة ما بتنحفظ. عدد الرسائل باليوم محدود.":(Store.mode==="local"?"المحادثة محفوظة على هذا الجهاز فقط.":"المحادثة محفوظة بحسابك.")+" "+DAILY_LIMIT+" رسالة باليوم."}</p>
   </section>`;
@@ -1150,7 +1178,24 @@ function drawChat(){
   const box=$("#msgs");box.scrollTop=box.scrollHeight;
   $("#cf").addEventListener("submit",e=>{e.preventDefault();const v=cin.value;cin.value="";send(v);});
   cin.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();$("#cf").requestSubmit();}});
-  cin.addEventListener("input",()=>{cin.style.height="auto";cin.style.height=Math.min(140,cin.scrollHeight)+"px";});
+  /* a fraction or a power looks different once sent, so the student sees it first */
+  const prev=()=>{const pv=$("#mprev");if(!pv)return;const v=cin.value.trim(),show=/[0-9٠-٩a-zء-ي)]\s*\/\s*[0-9٠-٩a-zء-ي(]|[²³⁴⁵]/.test(v);pv.hidden=!show;if(show)$("#mpv").innerHTML=mathify(v.replace(/\n/g," "));};
+  cin.addEventListener("input",()=>{cin.style.height="auto";cin.style.height=Math.min(140,cin.scrollHeight)+"px";prev();});
+  prev();
+  const pt=$("#padt");
+  if(pt)pt.onclick=()=>{CHAT.pad=!CHAT.pad;try{localStorage.setItem(PAD_KEY,CHAT.pad?"1":"0");}catch(e){}const keep=cin.value;drawChat();const c2=$("#cin");c2.value=keep;c2.dispatchEvent(new Event("input"));c2.focus();c2.setSelectionRange(keep.length,keep.length);
+    const m2=$("#mpad");if(m2&&m2.getBoundingClientRect().bottom>innerHeight-70)m2.scrollIntoView({block:"end",behavior:"smooth"});};
+  const mp=$("#mpad");
+  if(mp){
+    const put=t=>{let s=cin.selectionStart??cin.value.length,e=cin.selectionEnd??s;const v=cin.value;
+      if(t[0]===" "&&(s===0||/\s/.test(v[s-1])))t=t.slice(1);          /* no double spaces around an operation */
+      if(t.length>1&&t[t.length-1]===" "&&/\s/.test(v[e]||""))t=t.slice(0,-1);
+      cin.value=v.slice(0,s)+t+v.slice(e);const p=s+t.length;cin.focus();cin.setSelectionRange(p,p);cin.dispatchEvent(new Event("input"));};
+    const del=()=>{const s=cin.selectionStart??cin.value.length,e=cin.selectionEnd??s,a=s===e?Math.max(0,s-1):s;cin.value=cin.value.slice(0,a)+cin.value.slice(e);cin.focus();cin.setSelectionRange(a,a);cin.dispatchEvent(new Event("input"));};
+    mp.addEventListener("mousedown",e=>e.preventDefault());           /* the text box keeps the cursor */
+    mp.querySelectorAll("button").forEach(b=>b.onclick=()=>{
+      if(b.dataset.act==="del")del();else if(b.dataset.act==="abc")pt.click();else put(b.dataset.t);beep("pop");});
+  }
   app.querySelectorAll(".suggest button").forEach(b=>b.onclick=()=>send(b.dataset.s));
   const st=$("#stop");if(st)st.onclick=()=>CHAT.ctl&&CHAT.ctl.abort();
   const cl=$("#clr");if(cl)cl.onclick=()=>{if(CHAT.busy&&CHAT.ctl)CHAT.ctl.abort();S.chat.turns=[];CHAT.err="";save();drawChat();};

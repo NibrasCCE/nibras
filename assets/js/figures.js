@@ -226,7 +226,7 @@ const FIG=(function(){
     ,
     /* --- order of operations, one step per line: the operation done next is highlighted (HTML, not SVG) --- */
     steps(arg){const lines=runSteps(arg);if(!lines)return null;
-      return{svg:`<div class="steps" role="img" aria-label="خطوات الحل بالترتيب">${lines.map((l,k)=>`<div><span class="m">${k?"= ":""}${l}</span></div>`).join("")}</div>`,cap:"العملية الملوّنة هي التي أجريها أولاً في كل سطر."};},
+      return{svg:`<div class="fsteps" role="img" aria-label="خطوات الحل بالترتيب">${lines.map((l,k)=>`<div><span class="m">${k?"= ":""}${l}</span></div>`).join("")}</div>`,cap:"العملية الملوّنة هي التي أجريها أولاً في كل سطر."};},
     /* --- a power as repeated multiplication: every row has «base» times as many dots as the row above --- */
     grow(arg){const p=String(arg||"").split(","),b=+p[0],e=+p[1],hide=p[2]==="?";if(!(b>1)||!(e>0)||Math.pow(b,e)>32)return null;
       const n=Math.pow(b,e),lab=74,pad=12,tw=Math.max(n*15,150),W=tw+pad*2+lab,dy=40,y0=16,H=y0+e*dy+16,x0=AR?pad:pad+lab,s=AR?-1:1,lx=AR?W-pad-8:pad+8;let g="";
@@ -282,7 +282,7 @@ const FIG=(function(){
     /* --- the sign rule for multiplying, seen as a pattern --- */
     pattern(arg){const p=String(arg||"").split(","),m=parseInt(p[0],10),hide=p[1]==="?";if(!m||Math.abs(m)>12)return null;const f=v=>v<0?"("+"−"+(-v)+")":String(v),g=v=>v<0?"−"+(-v):String(v);
       const ks=[2,1,0,-1,-2],lines=ks.map((k,i)=>`<div><span class="m">${M(`${f(k)} × ${f(m)} = `)}${hide&&i===ks.length-1?'<span class="abox" aria-label="الجواب"></span>':M(g(k*m))}</span></div>`);
-      return{svg:`<div class="steps" role="img" aria-label="نمط نواتج الضرب">${lines.join("")}</div>`,cap:`في كل سطر ${m<0?"يزيد":"ينقص"} الناتج ${Math.abs(m)}.`};},
+      return{svg:`<div class="fsteps" role="img" aria-label="نمط نواتج الضرب">${lines.join("")}</div>`,cap:`في كل سطر ${m<0?"يزيد":"ينقص"} الناتج ${Math.abs(m)}.`};},
     /* --- the distributive property as the area of a rectangle cut in two --- */
     dist(arg){const p=String(arg||"").split(","),a=parseInt(p[0],10),v=(p[1]||"x").trim(),b=parseInt(p[2],10);if(!(a>0)||!(b>0)||!/^[a-z]$/.test(v))return null;
       const wv=120,wb=66,h=70,pad=12,side=30,top=24,W=pad*2+side+wv+wb,H=pad+top+h+pad,xs=AR?pad:pad+side,xv=AR?xs+wb:xs,xb=AR?xs:xs+wv,y=pad+top;let g="";
@@ -294,14 +294,14 @@ const FIG=(function(){
     subst(arg){const m=String(arg||"").match(/^(.+);\s*([a-z])\s*=\s*(-?\d+)$/);if(!m)return null;const expr=m[1].trim(),v=m[2],val=parseInt(m[3],10),V=val<0?"(−"+(-val)+")":String(val);
       const num=expr.replace(/-/g,"−").replace(new RegExp("(\\d*)"+v+"([²³⁴⁵]?)","g"),(_,c,sp)=>(c?c+" × ":"")+V+sp);if(/[a-z]/.test(num))return null;const lines=runSteps(num);if(!lines)return null;
       const head=`<div><span class="m">${M(expr.replace(/-/g,"−"))}</span><span class="note m">${M(v+" = "+(val<0?"−"+(-val):String(val)))}</span></div>`;
-      return{svg:`<div class="steps" role="img" aria-label="خطوات إيجاد القيمة العددية">${head}${lines.map(l=>`<div><span class="m">= ${l}</span></div>`).join("")}</div>`,cap:"أضع العدد مكان المتغير بين قوسين، ثم أحسب بالترتيب."};},
+      return{svg:`<div class="fsteps" role="img" aria-label="خطوات إيجاد القيمة العددية">${head}${lines.map(l=>`<div><span class="m">= ${l}</span></div>`).join("")}</div>`,cap:"أضع العدد مكان المتغير بين قوسين، ثم أحسب بالترتيب."};},
     /* --- solving ax + b = c the way the book does: add the opposite of b to both sides, then divide by a --- */
     solve(arg){const p=String(arg||"").split(","),a=parseInt(p[0],10),b=parseInt(p[1],10)||0,c=parseInt(p[2],10),v=(p[3]||"x").trim();if(!a||!isFinite(c)||(c-b)%a!==0)return null;
       const g=n=>n<0?"−"+(-n):String(n),ax=(a===1?"":a===-1?"−":g(a))+v,left=b?`${ax} ${b<0?"−":"+"} ${Math.abs(b)}`:ax,opp=-b,addOpp=opp<0?`+ (−${-opp})`:`+ ${opp}`,rows=[];
       rows.push([`${left} = ${g(c)}`,""]);
       if(b){rows.push([`${left} ${addOpp} = ${g(c)} ${addOpp}`,`أضيف معكوس ${g(b)} إلى الطرفين`]);rows.push([`${ax} = ${g(c-b)}`,""]);}
       if(a!==1)rows.push([`${v} = ${g((c-b)/a)}`,`أقسم الطرفين على ${g(a)}`]);
-      return{svg:`<div class="steps" role="img" aria-label="خطوات حل المعادلة">${rows.map(([e,n])=>`<div><span class="m">${M(e)}</span>${n?`<span class="note">${AR?arNum(n):n}</span>`:""}</div>`).join("")}</div>`,cap:"ما أفعله في طرف أفعله في الطرف الآخر، فيبقى الطرفان متساويين."};}
+      return{svg:`<div class="fsteps" role="img" aria-label="خطوات حل المعادلة">${rows.map(([e,n])=>`<div><span class="m">${M(e)}</span>${n?`<span class="note">${AR?arNum(n):n}</span>`:""}</div>`).join("")}</div>`,cap:"ما أفعله في طرف أفعله في الطرف الآخر، فيبقى الطرفان متساويين."};}
   };
   function make(spec){
     const m=String(spec||"").match(/^([a-z]+)(?::(.*))?$/);if(!m||!KINDS[m[1]])return null;
