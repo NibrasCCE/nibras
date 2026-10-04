@@ -1,8 +1,30 @@
 /* نبراس · محرك التصحيح: يتحقق من الأجوبة حسابياً ويطابقها مع مكتبة الأخطاء */
 /* ---------- grading engine: maths decides right/wrong ---------- */
 const AR_DIG={"٠":"0","١":"1","٢":"2","٣":"3","٤":"4","٥":"5","٦":"6","٧":"7","٨":"8","٩":"9","٫":".","،":","};
+
+/* ---------- Arabic school notation ----------
+   The content (data.js) and the grading below stay in one canonical notation (x, y, 0-9).
+   What the student SEES is converted to the notation of the school textbooks:
+   variables س ص …, digits ٠–٩, decimal mark ٫, percent ٪, written right to left.
+   What the student TYPES is converted back in norm() before grading, so both
+   «٤ن» and «4n» are accepted.
+   To switch the conversion off: MATH_NOTATION:"latin" in config.js. */
+const AR_MATH=!(typeof window!=="undefined"&&window.NIBRAS_CONFIG&&window.NIBRAS_CONFIG.MATH_NOTATION==="latin");
+const AR_VAR={a:"أ",b:"ب",c:"ج",d:"د",e:"ه",f:"ف",g:"غ",h:"ح",i:"ي",j:"ذ",k:"ك",l:"ط",m:"م",n:"ن",o:"خ",p:"ل",q:"ق",r:"ر",s:"ث",t:"ت",u:"ظ",v:"ض",w:"و",x:"س",y:"ص",z:"ع"};
+const LAT_VAR=Object.assign(Object.fromEntries(Object.entries(AR_VAR).map(([l,a])=>[a,l])),{"ا":"a","إ":"a","آ":"a","ة":"e","ى":"i"});
+const arDigits=s=>String(s).replace(/[0-9]/g,d=>"٠١٢٣٤٥٦٧٨٩"[+d]);
+/* a maths fragment, where every Latin letter is a variable → Arabic notation (plain text) */
+function arMath(s){
+  s=String(s);if(!AR_MATH)return s;
+  return arDigits(s.replace(/([0-9٠-٩])\.(?=[0-9٠-٩])/g,"$1٫").replace(/%/g,"٪").replace(/[a-z]/g,c=>AR_VAR[c]||c));
+}
+/* ordinary text: only the digits, the decimal mark and the percent sign change */
+function arNum(s){
+  s=String(s);if(!AR_MATH)return s;
+  return arDigits(s.replace(/([0-9٠-٩])\.(?=[0-9٠-٩])/g,"$1٫").replace(/([0-9٠-٩])\s?%/g,"$1٪"));
+}
 function norm(s){
-  return String(s).replace(/[٠-٩٫]/g,c=>AR_DIG[c]).replace(/[−–—]/g,"-").replace(/×/g,"*").replace(/÷/g,"/")
+  return String(s).replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069\u0640]/g,"").replace(/٪/g,"%").replace(/[\u0621-\u064A]/g,c=>LAT_VAR[c]||c).replace(/[٠-٩٫]/g,c=>AR_DIG[c]).replace(/[−–—]/g,"-").replace(/×/g,"*").replace(/÷/g,"/")
     .replace(/²/g,"^2").replace(/³/g,"^3").replace(/⁴/g,"^4").replace(/\s+/g,"").toLowerCase();
 }
 function tokenize(s){

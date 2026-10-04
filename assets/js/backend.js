@@ -156,10 +156,16 @@ function SupabaseStore(){
     /* Guest teacher: an anonymous Supabase user with role "teacher" (no e-mail, no password).
        Needs «Allow anonymous sign-ins» in Supabase and migration 0002_teacher_guest.sql. */
     async guestTeacher(){
+      /* the number of guest teachers is limited on the server (migration 0003_guest_limit.sql);
+         ask first so a full house gets a clear message instead of a failed sign-in */
+      let max=0;
+      const full=()=>({ok:false,err:"عدد المعلمين الزوّار مكتمل هلأ"+(max?" (الحد "+max+")":"")+". جرّب بوقت ثاني، أو احكي مع فريق نبراس."});
+      try{const {data}=await sb.rpc("guest_teacher_open");if(data&&typeof data==="object"){max=Number(data.max)||0;if(data.open===false)return full();}}catch(e){}
       const {error}=await sb.auth.signInAnonymously({options:{data:{role:"teacher",name:"معلم زائر"}}});
       if(error){
         const c=error.code||error.error_code||"",m=String(error.message||"").toLowerCase();
-        if(c==="anonymous_provider_disabled"||m.includes("anonymous"))return{ok:false,err:"دخول الزوّار مش مفعّل على الخادم. (للفريق: فعّلوا «Allow anonymous sign-ins» بإعدادات Supabase، شوف الدليل.)"};
+        if(c==="anonymous_provider_disabled"||m.includes("anonymous sign-ins are disabled"))return{ok:false,err:"دخول الزوّار مش مفعّل على الخادم. (للفريق: فعّلوا «Allow anonymous sign-ins» بإعدادات Supabase، شوف الدليل.)"};
+        if(m.includes("database error"))return full(); /* the server refused: the last place was taken a moment ago */
         return{ok:false,err:authErr(error)};
       }
       const p=await loadMe();

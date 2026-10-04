@@ -55,16 +55,51 @@ $("#brandlink").innerHTML=LOGO.replace('class="logo"','');
 
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const RUN=/[A-Za-z0-9▢(−\-|][A-Za-z0-9²³⁴⁵ ×÷=+\-−().\/▢|%]*(?:=\s*[؟▢]|[A-Za-z0-9²³⁴⁵)▢|%])|[A-Za-z▢]/g;
+/* ---- Arabic school notation on screen (see engine.js) ----
+   fractions are stacked (numerator over denominator) and powers are raised,
+   so nothing depends on which side of a slash the reader starts from. */
+document.documentElement.setAttribute("data-math",AR_MATH?"ar":"latin");
+if(!AR_MATH){const k=document.createElement("script");k.src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js";document.head.appendChild(k);} /* LaTeX is only drawn in the Latin notation */
+const SUPS={"²":"2","³":"3","⁴":"4","⁵":"5"};
+function decorate(h){               /* h: already-escaped text in Arabic notation */
+  if(!AR_MATH)return h;
+  return h.replace(/(^|[^\/٠-٩٫])([٠-٩]+)\/([٠-٩]+)(?![\/٠-٩٫])/g,(_,pre,a,b)=>`${pre}<span class="frac"><span>${a}</span><span>${b}</span></span>`)
+    .replace(/\^([٠-٩]+)/g,"<sup>$1</sup>")
+    .replace(/[²³⁴⁵]/g,c=>`<sup>${arDigits(SUPS[c])}</sup>`);
+}
+const mathHTML=t=>decorate(esc(arMath(t)));          /* one maths fragment */
+const mx=t=>`<span class="m">${mathHTML(t)}</span>`;
+const plainHTML=t=>decorate(esc(arNum(t)));          /* ordinary text around the maths */
+const IS_MATH=/[A-Za-z=+−×÷²³⁴⁵▢|%]|\d\s*[-−]\s*\d|\d\/\d|\d\.\d|^−\d/;
 function mathify(raw){
   raw=String(raw); let out="",last=0,m; RUN.lastIndex=0;
   while((m=RUN.exec(raw))){
-    const t=m[0]; out+=esc(raw.slice(last,m.index));
-    out+=/[A-Za-z=+−×÷²³⁴⁵▢|%]|\d\s*[-−]\s*\d|\d\/\d|\d\.\d|^−\d/.test(t)?`<span class="m">${esc(t)}</span>`:esc(t);
+    const t=m[0]; out+=plainHTML(raw.slice(last,m.index));
+    out+=IS_MATH.test(t)?mx(t):plainHTML(t);
     last=m.index+t.length;
   }
-  return out+esc(raw.slice(last));
+  return out+plainHTML(raw.slice(last));
+}
+/* the same conversion as plain text: for the AI prompts, the chat box and the parents' e-mails */
+function arProse(raw){
+  raw=String(raw);if(!AR_MATH)return raw;
+  let out="",last=0,m; RUN.lastIndex=0;
+  while((m=RUN.exec(raw))){
+    const t=m[0]; out+=arNum(raw.slice(last,m.index));
+    out+=IS_MATH.test(t)?arMath(t).replace(/[²³⁴⁵]/g,c=>"^"+arDigits(SUPS[c])):arNum(t);
+    last=m.index+t.length;
+  }
+  return out+arNum(raw.slice(last));
+}
+/* the AI is told to write plain text, but if it still sends $LaTeX$ we unfold it */
+function texToPlain(t){
+  return String(t).replace(/\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g,"$1/$2").replace(/\\(?:times|cdot)/g,"×").replace(/\\div/g,"÷")
+    .replace(/\\(?:left|right)/g,"").replace(/\\%/g,"%").replace(/\\leq?(?![a-z])/g,"≤").replace(/\\geq?(?![a-z])/g,"≥").replace(/\\neq?(?![a-z])/g,"≠")
+    .replace(/\\sqrt\s*\{([^{}]*)\}/g,"√($1)").replace(/\\text\s*\{([^{}]*)\}/g,"$1")
+    .replace(/\^\{?2\}?/g,"²").replace(/\^\{?3\}?/g,"³").replace(/[{}\\]/g,"").replace(/-/g,"−").trim();
 }
 function tex(t){
+  if(AR_MATH)return mx(texToPlain(t));
   try{ if(window.katex) return `<span class="m">${katex.renderToString(t,{output:"mathml",throwOnError:false})}</span>`; }catch(e){}
   return `<span class="m">${esc(t)}</span>`;
 }
@@ -76,7 +111,7 @@ function md(text){
   const fp=()=>{if(para.length){html+=`<p>${para.map(inline).join("<br>")}</p>`;para=[];}};
   const fl=()=>{if(list){html+=`<${list.t}>${list.items.map(i=>`<li>${inline(i)}</li>`).join("")}</${list.t}>`;list=null;}};
   for(const ln of lines){
-    const o=ln.match(/^\s*(\d+)[.)]\s+(.*)$/),u=ln.match(/^\s*[-•*]\s+(.*)$/);
+    const o=ln.match(/^\s*([0-9٠-٩]+)[.)]\s+(.*)$/),u=ln.match(/^\s*[-•*]\s+(.*)$/);
     if(o){fp();if(!list||list.t!=="ol"){fl();list={t:"ol",items:[]};}list.items.push(o[2]);}
     else if(u){fp();if(!list||list.t!=="ul"){fl();list={t:"ul",items:[]};}list.items.push(u[1]);}
     else if(!ln.trim()){fp();fl();}
@@ -180,10 +215,11 @@ const litCount=(p,lv)=>(lv?SK_LV[lv]:SKILLS.map(s=>s.id)).filter(id=>isLitP(p,id
 const STATUS={mastered:["متمكّن","lit"],assumed:["ثابتة","good"],partial:["بدها تقوية","calm"],gap:["رح نشتغل عليها","calm"],untested:["لسا ما وصلناها","plain"]};
 const fmtDate=iso=>{try{return new Date(iso).toLocaleDateString("ar-PS-u-nu-latn",{day:"numeric",month:"long"});}catch(e){return String(iso).slice(0,10);}};
 const fmtTime=iso=>{try{return new Date(iso).toLocaleString("ar-PS-u-nu-latn",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});}catch(e){return String(iso).slice(0,16);}};
-const fmtN=k=>k<0?"−"+Math.abs(k):String(k);
+const fmtN=k=>arNum(k<0?"−"+Math.abs(k):String(k));
 
 /* ---------- parent notifications (simulated sending) ---------- */
-function composeMsg(stu,kind,extra,ch){
+function composeMsg(stu,kind,extra,ch){const m=composeMsg0(stu,kind,extra,ch);return m?{subject:arNum(m.subject),body:arNum(m.body)}:m;}
+function composeMsg0(stu,kind,extra,ch){
   const p=stu.progress,nick=stu.nick,d=p.diag;
   const lines=[];let subject="";
   if(kind==="diag"&&d){
@@ -453,7 +489,7 @@ const TYPE_IC={
 };
 function keysFor(stem){
   const letters=[...new Set((String(stem).match(/[a-z]/g)||[]))].slice(0,3);
-  return [...letters,"²","+","−","×","/",".","(",")","="];
+  return [...letters,"²","+","−","×","/",".","(",")","="].map(k=>!AR_MATH?k:k==="."?"٫":arMath(k));
 }
 /* o: {mode:"diag"|"practice", init, tried:[], locked, reveal, onChange(ready), onEnter()} */
 function mountWidget(q,host,o){
@@ -468,17 +504,22 @@ function mountWidget(q,host,o){
   if(q.type==="type"){
     host.innerHTML=`<div class="ansbox">
       <label for="ans" class="small" style="font-weight:800;color:var(--brand-text)">اكتب جوابك</label>
-      <input id="ans" class="ans" type="text" dir="ltr" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="جوابك هون" ${o.locked?"disabled":""}>
+      <input id="ans" class="ans" type="text" dir="${AR_MATH?"rtl":"ltr"}" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="جوابك هون" ${o.locked?"disabled":""}>
       <div class="keys" aria-label="رموز">${keysFor(q.stem).map(k=>`<button type="button" data-k="${esc(k)}" ${o.locked?"disabled":""}>${esc(k)}</button>`).join("")}<button type="button" data-k="⌫" aria-label="امسح حرف" ${o.locked?"disabled":""}>⌫</button></div>
     </div>`;
-    const inp=$("#ans",host);inp.value=o.init||"";
+    const inp=$("#ans",host);inp.value=arMath(o.init||"");
     const sync=()=>o.onChange&&o.onChange(!!inp.value.trim());
-    inp.addEventListener("input",sync);
+    /* what the student types turns into school notation as they type (1 → ١, x → س);
+       skipped while a phone keyboard is still composing a word */
+    const local=()=>{const v=inp.value,nv=arMath(v);if(nv!==v){const s=inp.selectionStart,e=inp.selectionEnd;inp.value=nv;try{inp.setSelectionRange(s,e);}catch(_){}}};
+    inp.addEventListener("input",ev=>{if(!ev.isComposing)local();sync();});
+    inp.addEventListener("compositionend",()=>{local();sync();});
+    inp.addEventListener("blur",local);
     inp.addEventListener("keydown",e=>{if(e.key==="Enter"&&inp.value.trim()){e.preventDefault();o.onEnter&&o.onEnter();}});
     host.querySelectorAll(".keys button").forEach(b=>b.onclick=()=>{
       const k=b.dataset.k,s=inp.selectionStart??inp.value.length,e=inp.selectionEnd??s;
       if(k==="⌫"){const a=s===e?Math.max(0,s-1):s;inp.value=inp.value.slice(0,a)+inp.value.slice(e);inp.setSelectionRange(a,a);}
-      else{const ins=/[a-z²().]/.test(k)?k:` ${k} `;inp.value=inp.value.slice(0,s)+ins+inp.value.slice(e);const p=s+ins.length;inp.setSelectionRange(p,p);}
+      else{const ins=/^[a-z\u0621-\u064A²().٫]$/.test(k)?k:` ${k} `;inp.value=inp.value.slice(0,s)+ins+inp.value.slice(e);const p=s+ins.length;inp.setSelectionRange(p,p);}
       inp.focus();sync();
     });
     if(!o.locked&&!matchMedia("(pointer: coarse)").matches)setTimeout(()=>inp.focus(),30);
@@ -486,9 +527,9 @@ function mountWidget(q,host,o){
   }
   if(q.type==="hop"){
     const MIN=-10,MAX=10;let v=o.init!=null?o.init:q.start,moved=o.init!=null;
-    const ticks=[];for(let k=MIN;k<=MAX;k++)ticks.push(`<button type="button" class="tick ${k===0?"zero":""}" data-v="${k}" aria-label="${fmtN(k)}" ${o.locked?"disabled":""}><span class="tk"></span><span>${fmtN(k)}</span></button>`);
+    const ticks=[];for(let k=MIN;k<=MAX;k++)ticks.push(`<button type="button" class="tick ${k===0?"zero":""}" data-v="${k}" aria-label="${fmtN(k)}" ${o.locked?"disabled":""}><span class="tk"></span><span dir="${AR_MATH?"rtl":"ltr"}">${fmtN(k)}</span></button>`);
     host.innerHTML=`<div class="nlwrap"><div class="nl">${ticks.join("")}<div class="startmark" style="--i:${q.start-MIN}">البداية</div><div class="frog" id="frog" style="--i:${v-MIN}">${FROG}</div></div></div>
-      <div class="hopctl" dir="ltr"><button type="button" data-d="-1" ${o.locked?"disabled":""} aria-label="خطوة لليسار">⟵ −1</button><output id="hv" aria-live="polite">${fmtN(v)}</output><button type="button" data-d="1" ${o.locked?"disabled":""} aria-label="خطوة لليمين">+1 ⟶</button></div>`;
+      <div class="hopctl" dir="ltr"><button type="button" data-d="-1" ${o.locked?"disabled":""} aria-label="خطوة لليسار">⟵ <span dir="${AR_MATH?"rtl":"ltr"}">${fmtN(-1)}</span></button><output id="hv" aria-live="polite" dir="${AR_MATH?"rtl":"ltr"}">${fmtN(v)}</output><button type="button" data-d="1" ${o.locked?"disabled":""} aria-label="خطوة لليمين"><span dir="${AR_MATH?"rtl":"ltr"}">+${fmtN(1)}</span> ⟶</button></div>`;
     const frog=$("#frog",host);
     const set=nv=>{nv=Math.max(MIN,Math.min(MAX,nv));if(nv===v&&moved)return;v=nv;moved=true;frog.style.setProperty("--i",v-MIN);frog.classList.remove("hop");void frog.offsetWidth;frog.classList.add("hop");$("#hv",host).textContent=fmtN(v);beep("pop");o.onChange&&o.onChange(true);};
     host.querySelectorAll(".hopctl button").forEach(b=>b.onclick=()=>set(v+ +b.dataset.d));
@@ -509,8 +550,8 @@ function mountWidget(q,host,o){
     const draw=()=>{
       host.innerHTML=`<div style="display:grid;gap:12px">
         <div class="orderhint"><span>الأصغر</span><span>الأكبر</span></div>
-        <div class="slots" style="--n:${items.length}">${items.map((_,k)=>`<div class="slot"><small>${k+1}</small>${placed[k]!=null?`<button type="button" data-k="${k}" ${o.locked?"disabled":""}>${esc(items[placed[k]])}</button>`:""}</div>`).join("")}</div>
-        <div class="pool">${items.map((t,i)=>placed.includes(i)?"":`<button type="button" data-i="${i}" ${o.locked?"disabled":""}>${esc(t)}</button>`).join("")||`<span class="tiny">كل البطاقات بمكانها. اضغط على بطاقة لترجعها.</span>`}</div>
+        <div class="slots" style="--n:${items.length}">${items.map((_,k)=>`<div class="slot"><small>${k+1}</small>${placed[k]!=null?`<button type="button" data-k="${k}" ${o.locked?"disabled":""}>${mx(items[placed[k]])}</button>`:""}</div>`).join("")}</div>
+        <div class="pool">${items.map((t,i)=>placed.includes(i)?"":`<button type="button" data-i="${i}" ${o.locked?"disabled":""}>${mx(t)}</button>`).join("")||`<span class="tiny">كل البطاقات بمكانها. اضغط على بطاقة لترجعها.</span>`}</div>
       </div>`;
       host.querySelectorAll(".pool button").forEach(b=>b.onclick=()=>{placed.push(+b.dataset.i);beep("pop");draw();o.onChange&&o.onChange(placed.length===items.length);});
       host.querySelectorAll(".slot button").forEach(b=>b.onclick=()=>{placed.splice(+b.dataset.k,1);draw();o.onChange&&o.onChange(false);});
@@ -523,8 +564,8 @@ function mountWidget(q,host,o){
 function scaleSVG(stem,tilt){
   const m=String(stem).match(/([^:؟]*=[^:؟]*)$/);if(!m)return"";
   const [l,r]=m[1].split("=").map(s=>s.trim());if(!l||!r)return"";
-  const a=tilt||0;
-  return `<svg class="scale" viewBox="0 0 360 150" role="img" aria-label="ميزان: ${esc(l)} في كفة و ${esc(r)} في الكفة الثانية">
+  const a=(AR_MATH?-1:1)*(tilt||0),xl=AR_MATH?290:70,xr=AR_MATH?70:290,dir=AR_MATH?"rtl":"ltr",fam=AR_MATH?"Tajawal, Nunito, sans-serif":"Nunito, sans-serif";
+  return `<svg class="scale" viewBox="0 0 360 150" role="img" aria-label="ميزان: ${esc(arMath(l))} في كفة و ${esc(arMath(r))} في الكفة الثانية">
     <rect x="172" y="34" width="16" height="96" rx="6" fill="var(--brand)"/>
     <rect x="128" y="128" width="104" height="12" rx="6" fill="var(--brand)"/>
     <g class="beam" style="transform:rotate(${a}deg)">
@@ -532,8 +573,8 @@ function scaleSVG(stem,tilt){
       <path d="M70 37 50 86M70 37 90 86M290 37 270 86M290 37 310 86" stroke="var(--ink-3)" stroke-width="2"/>
       <path d="M30 86h80a40 18 0 0 1-80 0z" fill="var(--glow-soft)" stroke="var(--lamp)" stroke-width="2"/>
       <path d="M250 86h80a40 18 0 0 1-80 0z" fill="var(--glow-soft)" stroke="var(--lamp)" stroke-width="2"/>
-      <text x="70" y="78" text-anchor="middle" font-family="Nunito, sans-serif" font-weight="900" font-size="22" fill="var(--ink)" style="direction:ltr;unicode-bidi:isolate">${esc(l)}</text>
-      <text x="290" y="78" text-anchor="middle" font-family="Nunito, sans-serif" font-weight="900" font-size="22" fill="var(--ink)" style="direction:ltr;unicode-bidi:isolate">${esc(r)}</text>
+      <text x="${xl}" y="78" text-anchor="middle" font-family="${fam}" font-weight="900" font-size="22" fill="var(--ink)" style="direction:${dir};unicode-bidi:isolate">${esc(arMath(l))}</text>
+      <text x="${xr}" y="78" text-anchor="middle" font-family="${fam}" font-weight="900" font-size="22" fill="var(--ink)" style="direction:${dir};unicode-bidi:isolate">${esc(arMath(r))}</text>
     </g>
     <circle cx="180" cy="32" r="10" fill="var(--lamp)"/>
   </svg>`;
@@ -658,14 +699,14 @@ async function endGame(){
 
 /* ---------- AI: explain WHY an answer is wrong (picks from the library only) ---------- */
 function aiDiagnose(entry,q){
-  const lib=MIS.map(m=>`${m.id}: ${m.title} — ${m.description} مثال: ${m.example}`).join("\n");
+  const lib=MIS.map(m=>`${m.id}: ${m.title} — ${arProse(m.description)} مثال: ${arProse(m.example)}`).join("\n");
   const prompt=`أنت مساعد تشخيص لمعلم رياضيات. طالب في الصف السابع أجاب إجابة خاطئة (تحققنا من خطئها حسابياً). حدّد الخطأ المفاهيمي الذي تدل عليه إجابته، من المكتبة أدناه فقط.
 
 المهارة: ${skillById[q.skill].title} (${LV[skillById[q.skill].lv].name})
-السؤال: ${q.stem}
+السؤال: ${arProse(q.stem)}
 نوع السؤال: ${TYPE_NAME[q.type]}
-الإجابة الصحيحة: ${correctText(q)}
-إجابة الطالب: ${entry.a}
+الإجابة الصحيحة: ${arProse(correctText(q))}
+إجابة الطالب: ${arProse(entry.a)}
 
 مكتبة الأخطاء المفاهيمية:
 ${lib}
@@ -673,7 +714,7 @@ ${lib}
 القواعد:
 - اختر id واحداً من المكتبة فقط إذا كانت إجابة الطالب تدل عليه بوضوح. إذا لم يتطابق أي خطأ بوضوح، أو كانت الإجابة تخميناً، اجعل misconception = null.
 - لا تخترع أخطاء خارج المكتبة.
-- reason: جملة واحدة قصيرة بالعربية للمعلم تشرح كيف وصل الطالب على الأرجح لإجابته.
+- reason: جملة واحدة قصيرة بالعربية للمعلم تشرح كيف وصل الطالب على الأرجح لإجابته.${AR_MATH?" اكتب الأرقام والرموز فيها كما في بيانات السؤال (٠١٢٣٤٥٦٧٨٩ وحروف عربية للمتغيرات).":""}
 
 أجب بكائن JSON فقط بهذا الشكل:
 {"misconception": "m05" أو null, "confidence": "high" أو "low", "reason": "..."}`;
@@ -689,7 +730,7 @@ ${lib}
 const SRC={math:"تحقق حسابي",match:"مطابقة مع مكتبة الأخطاء",form:"تحقق حسابي (الشكل غير مبسّط)",ai:"تحليل نبراس (AI)",none:"ما انحدد",skip:"تخطّى السؤال"};
 const REP={busy:false,text:"",ctl:null,fail:null};
 function reportPrompt(d,start,nick){
-  const ans=(d.answers||[]).map(a=>{const q=qById[a.qid];return `- [${q?skillById[q.skill].title:""}] ${q?q.stem:a.qid} | جواب الطالب: ${a.a} | ${a.ok?"صحيح":"خطأ"}${a.mis?` | الخطأ المفاهيمي: ${misById[a.mis].title}`:""}${a.why?` | ملاحظة: ${a.why}`:""}`;}).join("\n");
+  const ans=(d.answers||[]).map(a=>{const q=qById[a.qid];return `- [${q?skillById[q.skill].title:""}] ${q?arProse(q.stem):a.qid} | جواب الطالب: ${arProse(a.a)} | ${a.ok?"صحيح":"خطأ"}${a.mis?` | الخطأ المفاهيمي: ${misById[a.mis].title}`:""}${a.why?` | ملاحظة: ${a.why}`:""}`;}).join("\n");
   return `أنت «نبراس»، معلم رياضيات فلسطيني دافئ. اكتب لطالب في الصف السابع (اسمه المستعار: ${nick}) تقريراً قصيراً عن نتيجة لعبة التشخيص التي أنهاها الآن. اللعبة تختبر مهارات من الصف الخامس والسادس والسابع.
 
 القواعد:
@@ -697,7 +738,7 @@ function reportPrompt(d,start,nick){
 - امدح مجهوده وطريقته، لا ذكاءه. لا علامات ولا نسب مئوية ولا كلمات محبطة، ولا تقل إنه «متأخر» أو «ضعيف».
 - اذكر فكرة أو فكرتين خاطئتين فقط مما ورد في البيانات أدناه، بلغة بسيطة، مع نصيحة قصيرة لكل واحدة. إذا لم ترد أخطاء مفاهيمية، امدح ثباته.
 - اختم بجملة أننا سنبدأ معاً من مهارة «${start?start.title:"التحدي مع نبراس"}».
-- لا تذكر أي معلومة غير موجودة في البيانات. اكتب أي تعبير رياضي بين علامتي $ مثل $3x + 6$.
+- لا تذكر أي معلومة غير موجودة في البيانات. ${AR_MATH?"اكتب أي تعبير رياضي كنص عادي بترميز الكتاب المدرسي كما في البيانات: الأرقام ٠١٢٣٤٥٦٧٨٩ والمتغيرات بحروف عربية، مثل ٣س + ٦، بدون LaTeX وبدون علامة الدولار.":"اكتب أي تعبير رياضي بين علامتي $ مثل $3x + 6$."}
 
 حالة المهارات: ${SKILLS.map(s=>`${s.title} (${LV[s.lv].short}) = ${STATUS[d.skills[s.id]][0]}`).join("؛ ")}
 إجابات الطالب:
@@ -738,8 +779,8 @@ function vResult(){
       ${d.answers&&d.answers.length?`<details class="detail"><summary>تفاصيل التشخيص (للمعلم)</summary>
         <div class="dlist">${d.answers.map((a,i)=>{const q=qById[a.qid];return `<div class="drow">
           <p class="small"><b>${i+1}.</b> <span class="chip plain">${q?LV[skillById[q.skill].lv].short:""}</span> ${q?mathify(q.stem):""}</p>
-          <p class="small">جواب الطالب: <span class="m">${esc(a.a)}</span> · <span class="chip ${a.ok?"good":"plain"}">${a.ok?"صحيح":"غير صحيح"}</span></p>
-          <p class="tiny">${a.mis?`الخطأ المفاهيمي: <b>${esc(misById[a.mis].title)}</b> (${a.mis}) · `:""}الطريقة: ${SRC[a.src]||a.src}${a.why?` · ${esc(a.why)}`:""}</p>
+          <p class="small">جواب الطالب: ${mx(a.a)} · <span class="chip ${a.ok?"good":"plain"}">${a.ok?"صحيح":"غير صحيح"}</span></p>
+          <p class="tiny">${a.mis?`الخطأ المفاهيمي: <b>${esc(misById[a.mis].title)}</b> (${a.mis}) · `:""}الطريقة: ${SRC[a.src]||a.src}${a.why?` · ${mathify(a.why)}`:""}</p>
         </div>`;}).join("")}</div></details>`:""}
     </div>
     <p class="draft">النتيجة تقدير أولي من ${d.count} ألغاز. الصح والغلط بيتحدد بالحساب، والذكاء الاصطناعي بيقترح سبب الغلط وممكن يخطئ. المهارات «الثابتة» ما انختبرت لأنك نجحت بمستوى أعلى منها.</p>
@@ -814,7 +855,7 @@ function vSkill(sid){
   const chk=$("#chk");
   if(chk){chk.disabled=!w.ready()||(q.type==="bubbles"&&P.tried.includes(w.value()));chk.onclick=()=>pick(w.value(),chk,q.type==="order"?w.placedIdx():null);}
   const nq=$("#nextq");if(nq){nq.onclick=()=>{P.i++;Object.assign(P,{first:true,state:"ask",fb:null,tried:[],val:null,order:null,items:null,tilt:0});vSkill(sid);};nq.focus();}
-  $("#askq").onclick=()=>{CHAT.prefill=`عندي هالسؤال: ${q.stem}\nممكن تساعدني أفكّر فيه بدون ما تعطيني الحل؟`;};
+  $("#askq").onclick=()=>{CHAT.prefill=`عندي هالسؤال: ${arProse(q.stem)}\nممكن تساعدني أفكّر فيه بدون ما تعطيني الحل؟`;};
 }
 function pick(val,btn,placedIdx){
   const q=P.qs[P.i],sid=P.sid,r=grade(q,val);
@@ -972,7 +1013,9 @@ const PROMPT=`أنت «نبراس»، معلم رياضيات افتراضي ف�
 - لا تكتب أي محتوى غير مناسب لعمر الطالب.
 
 # التنسيق
-- اكتب كل تعبير رياضي بين علامتي دولار بصيغة LaTeX بسيطة، مثل $3x + 5 = 20$.
+${AR_MATH?`- اكتب الرياضيات بترميز الكتاب المدرسي الفلسطيني دائماً: الأرقام ٠١٢٣٤٥٦٧٨٩، والمتغيرات بحروف عربية (س، ص، ع، ن)، والفاصلة العشرية ٫ مثل ٤٫٥، والنسبة المئوية ٪ مثل ٢٥٪.
+- اكتب التعبير الرياضي كنص عادي داخل الجملة، مثل: ٣س + ٥ = ٢٠. لا تستخدم LaTeX ولا علامة الدولار، ولا أرقاماً أو حروفاً لاتينية حتى لو كتب الطالب بها.
+- الكسر: البسط ثم شرطة مائلة ثم المقام، مثل ٣/٤. والأس بالرمز ^ مثل س^٢.`:"- اكتب كل تعبير رياضي بين علامتي دولار بصيغة LaTeX بسيطة، مثل $3x + 5 = 20$."}
 - قائمة مرقمة فقط عند شرح خطوات حل. لا عناوين ولا جداول.
 
 # وسم خفي (للنظام فقط)
@@ -992,9 +1035,9 @@ function context(){
   const det=Object.entries(S.detected).sort((a,b)=>b[1]-a[1]).map(([id,n])=>`${id} (${n})`);
   if(det.length)L.push("- أخطاء مفاهيمية لوحظت سابقاً: "+det.join("، "));
   L.push("","# مكتبة الأخطاء المفاهيمية");
-  MIS.forEach(m=>L.push(`- ${m.id}: ${m.title}. ${m.description} مثال: ${m.example} علاج مقترح: ${HINT[m.id]}`));
+  MIS.forEach(m=>L.push(`- ${m.id}: ${m.title}. ${arProse(m.description)} مثال: ${arProse(m.example)} علاج مقترح: ${arProse(HINT[m.id])}`));
   L.push("","# مهارات المسار (مسودة، مرتبة من الصف الخامس للسابع)");
-  SKILLS.forEach(s=>L.push(`- ${s.title} (${LV[s.lv].name}): ${s.explanation} مثال: ${s.example}`));
+  SKILLS.forEach(s=>L.push(`- ${s.title} (${LV[s.lv].name}): ${arProse(s.explanation)} مثال: ${arProse(s.example)}`));
   return L.join("\n");
 }
 const vis=t=>String(t).replace(/<<[^>]*>>/g,"").replace(/<<[^>]*$/,"").replace(/<$/,"").trim();
@@ -1050,7 +1093,7 @@ function drawChat(){
         ${turns.map(x=>`<div class="msg ${x.role==="user"?"me":"bot"}">${md(x.content.replace(/\n\[أرفق الطالب صورة لحلّه المكتوب\]$/,"\n(📷 صورة الحل)"))}</div>`).join("")}
         ${CHAT.busy?`<div class="msg bot" id="live"></div>`:""}
       </div>
-      ${!turns.length&&!off?`<div class="suggest">${["ما فهمت قسمة الكسور","ليش −4 − 3 = −7؟","كيف بحل 2x − 3 = 11؟"].map(s=>`<button type="button" data-s="${esc(s)}">${mathify(s)}</button>`).join("")}</div>`:""}
+      ${!turns.length&&!off?`<div class="suggest">${["ما فهمت قسمة الكسور","ليش −4 − 3 = −7؟","كيف بحل 2x − 3 = 11؟"].map(s=>`<button type="button" data-s="${esc(arProse(s))}">${mathify(s)}</button>`).join("")}</div>`:""}
       ${CHAT.err?`<div class="note" role="alert">${esc(CHAT.err)}</div>`:""}
       ${off?`<div class="note">${guest?"نبراس مطفي حالياً، فما في إشي تجرّبه هلأ. جرّب بوقت ثاني.":Store.mode==="local"?"نبراس (الذكاء الاصطناعي) بيشتغل بس لما الموقع يكون موصول بـ Supabase. بتقدر تكمل اللعبة والمسار عادي.":"نبراس مطفي حالياً. بتقدر تكمل اللعبة والمسار عادي."}</div>`:""}
       ${CHAT.file?`<div class="note">📷 مرفق: ${esc(CHAT.file.name||"صورة")} <button class="btn btn-line btn-sm" id="rmf" type="button">إزالة</button></div>`:""}
@@ -1078,6 +1121,24 @@ function drawChat(){
   if(!CHAT.busy&&!off&&cin.value)cin.focus();
 }
 
+
+/* Every Western digit left anywhere on the page becomes ٠–٩, so counters, dates and
+   numbers in ordinary sentences match the maths. Left alone: typed fields, the link
+   code, e-mail addresses and phone numbers (anything marked dir="ltr" or .code). */
+if(AR_MATH&&typeof MutationObserver==="function"){
+  const SKIP='input,textarea,script,style,noscript,.code,[dir="ltr"],[data-latin]';
+  const fixText=n=>{if(/[0-9]/.test(n.nodeValue)&&n.parentElement&&!n.parentElement.closest(SKIP))n.nodeValue=arNum(n.nodeValue);};
+  const fix=n=>{
+    if(n.nodeType===3)return fixText(n);
+    if(n.nodeType!==1||n.closest(SKIP))return;
+    const w=document.createTreeWalker(n,NodeFilter.SHOW_TEXT),list=[];let t;
+    while((t=w.nextNode()))list.push(t);
+    list.forEach(fixText);
+  };
+  new MutationObserver(ms=>{for(const m of ms){if(m.type==="characterData")fix(m.target);else m.addedNodes.forEach(fix);}})
+    .observe(document.body,{childList:true,subtree:true,characterData:true});
+  fix(document.body);
+}
 
 window.addEventListener("nibras-error",e=>toast(String(e.detail||"صار خطأ")));
 app.innerHTML=`<section class="view"><div class="card interlude">${LANTERN("big on")}<p class="muted">لحظة…</p></div></section>`;

@@ -45,6 +45,14 @@ p{margin:0}
 a{color:var(--brand-text)}
 :focus-visible{outline:3px solid var(--lamp);outline-offset:2px;border-radius:8px}
 .m{font-family:var(--f-num);font-weight:800;direction:ltr;unicode-bidi:isolate;white-space:nowrap;letter-spacing:.01em}
+/* Arabic school notation (set by app.js on <html>): maths runs right to left, fractions are stacked */
+[data-math="ar"] .m{direction:rtl;letter-spacing:0}
+[data-math="ar"] .ans{direction:rtl;text-align:right}
+[data-math="ar"] ol{list-style-type:arabic-indic}
+.frac{display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;line-height:1.15;margin:0 .18em;font-size:.84em;direction:rtl}
+.frac>span:first-child{border-bottom:.11em solid currentColor;padding:0 .3em .06em}
+.frac>span:last-child{padding:.04em .3em 0}
+.m sup,.msg sup{font-size:.68em;line-height:0}
 math{font-size:1.05em}
 .muted{color:var(--ink-2)} .small{font-size:.9rem} .tiny{font-size:.8rem;color:var(--ink-3)}
 .wrap{max-width:760px;margin-inline:auto;padding-inline:16px}
