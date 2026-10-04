@@ -511,9 +511,45 @@ const TYPE_IC={
   shade:'<rect x="3" y="8" width="18" height="8" rx="2"/><path d="M9 8v8M15 8v8"/><path d="M3 8h6v8H3z" fill="currentColor"/>',
   order:'<rect x="3" y="5" width="5" height="14" rx="1.5"/><rect x="10" y="9" width="5" height="10" rx="1.5"/><rect x="17" y="13" width="4" height="6" rx="1.5"/>'
 };
-function keysFor(stem){
-  const letters=[...new Set((String(stem).match(/[a-z]/g)||[]))].slice(0,3);
-  return [...letters,"²","+","−","×","/",".","(",")","="].map(k=>!AR_MATH?k:k==="."?"٫":arMath(k));
+/* ---------- maths keyboard: digits, operations and symbols in the school notation ----------
+   Used by the chat («١٢٣» opens it) and by the «اكتب جوابك» box of the questions (always there).
+   While it is in use the phone keyboard stays closed (inputmode="none"); «أ ب ج» gives it back.
+   On a computer both work together.
+   Each key: t = text put at the cursor · lab/html = what the key shows · cap = small caption.
+   letters: the variables offered in the top row (the question's own letters, otherwise x y z). */
+const PAD_KEY="nibras.pad";
+function padDefault(){try{const v=localStorage.getItem(PAD_KEY);if(v==="1")return true;if(v==="0")return false;}catch(e){}return matchMedia("(pointer: fine)").matches&&innerWidth>=700;}
+function padRows(letters){
+  const d=n=>({t:arMath(String(n)),cls:"dig"}),v=c=>({t:arMath(c),cls:"sym"}),R=AR_MATH;
+  const L=(letters&&letters.length?letters.slice(0,3):[]).concat(["x","y","z"].filter(c=>!(letters||[]).includes(c))).slice(0,3).map(v);
+  const open={t:"(",html:`<span dir="${R?"rtl":"ltr"}">(</span>`,cls:"sym"},close={t:")",html:`<span dir="${R?"rtl":"ltr"}">)</span>`,cls:"sym"};
+  const lt={t:" < ",html:`<span dir="${R?"rtl":"ltr"}">&lt;</span>`,cap:"أصغر من",cls:"sym"},gt={t:" > ",html:`<span dir="${R?"rtl":"ltr"}">&gt;</span>`,cap:"أكبر من",cls:"sym"};
+  return [
+    [...(R?[close,open,...L.slice().reverse()]:[...L,open,close]),{act:"del",html:"⌫",cap:"امسح",cls:"del"}],
+    [{t:"²",html:`<span dir="${R?"rtl":"ltr"}">▢<sup>${arMath("2")}</sup></span>`,cap:"تربيع",cls:"sym"},{t:"/",html:'<span class="frac"><span>▢</span><span>▢</span></span>',cap:"كسر",cls:"sym"},d(7),d(8),d(9),{t:" ÷ ",lab:"÷",cap:"قسمة",cls:"op"}],
+    [{t:"³",html:`<span dir="${R?"rtl":"ltr"}">▢<sup>${arMath("3")}</sup></span>`,cap:"تكعيب",cls:"sym"},{t:R?"٪":"%",cap:"بالمئة",cls:"sym"},d(4),d(5),d(6),{t:" × ",lab:"×",cap:"ضرب",cls:"op"}],
+    [{t:"√",cap:"جذر",cls:"sym"},{t:" : ",lab:":",cap:"نسبة",cls:"sym"},d(1),d(2),d(3),{t:"−",cap:"طرح",cls:"op"}],
+    [R?lt:gt,R?gt:lt,d(0),{t:R?"٫":".",cap:"فاصلة",cls:"dig"},{t:" = ",lab:"=",cap:"يساوي",cls:"op"},{t:" + ",lab:"+",cap:"جمع",cls:"op"}],
+    [{t:"|",cap:"قيمة مطلقة",cls:"sym"},{t:" ",lab:"مسافة",cls:"wide"},{act:"abc",lab:"أ ب ج",cls:"abc",cap:""}]
+  ];
+}
+/* o: {letters, small, locked} */
+function padHTML(o){
+  o=o||{};
+  return `<div class="mpadbox"><div class="mpad ${o.small?"sm":""}" role="group" aria-label="لوحة الأرقام والرموز">${padRows(o.letters).map(r=>r.map(k=>
+    `<button type="button" class="${k.cls||""}" ${k.act?`data-act="${k.act}"`:`data-t="${esc(k.t)}"`} aria-label="${esc(k.cap||k.lab||k.t)}" ${o.locked?"disabled":""}>${k.html||esc(k.lab||k.t)}${k.cap?`<small>${k.cap}</small>`:""}</button>`).join("")).join("")}</div></div>`;
+}
+/* the keys write into `box` (an input or a textarea) at the cursor; onAbc(button) is the «أ ب ج» key */
+function bindPad(mp,box,onAbc){
+  const fire=()=>box.dispatchEvent(new Event("input",{bubbles:true}));
+  const put=t=>{const s=box.selectionStart??box.value.length,e=box.selectionEnd??s,v=box.value;
+    if(t[0]===" "&&(s===0||/\s/.test(v[s-1])))t=t.slice(1);          /* no double spaces around an operation */
+    if(t.length>1&&t[t.length-1]===" "&&/\s/.test(v[e]||""))t=t.slice(0,-1);
+    box.value=v.slice(0,s)+t+v.slice(e);const p=s+t.length;box.focus();try{box.setSelectionRange(p,p);}catch(_){}fire();};
+  const del=()=>{const s=box.selectionStart??box.value.length,e=box.selectionEnd??s,a=s===e?Math.max(0,s-1):s;box.value=box.value.slice(0,a)+box.value.slice(e);box.focus();try{box.setSelectionRange(a,a);}catch(_){}fire();};
+  mp.addEventListener("mousedown",e=>e.preventDefault());             /* the text box keeps the cursor */
+  mp.querySelectorAll("button").forEach(b=>b.onclick=()=>{
+    if(b.dataset.act==="del")del();else if(b.dataset.act==="abc"){if(onAbc)onAbc(b);}else put(b.dataset.t);beep("pop");});
 }
 /* o: {mode:"diag"|"practice", init, tried:[], locked, reveal, onChange(ready), onEnter()} */
 function mountWidget(q,host,o){
@@ -527,9 +563,8 @@ function mountWidget(q,host,o){
   }
   if(q.type==="type"){
     host.innerHTML=`<div class="ansbox">
-      <label for="ans" class="small" style="font-weight:800;color:var(--brand-text)">اكتب جوابك</label>
-      <input id="ans" class="ans" type="text" dir="${AR_MATH?"rtl":"ltr"}" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="جوابك هون" ${o.locked?"disabled":""}>
-      <div class="keys" aria-label="رموز">${keysFor(q.stem).map(k=>`<button type="button" data-k="${esc(k)}" ${o.locked?"disabled":""}>${esc(k)}</button>`).join("")}<button type="button" data-k="⌫" aria-label="امسح حرف" ${o.locked?"disabled":""}>⌫</button></div>
+      <input id="ans" class="ans" type="text" aria-label="اكتب جوابك" inputmode="none" dir="${AR_MATH?"rtl":"ltr"}" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="اكتب جوابك من اللوحة تحت" ${o.locked?"disabled":""}>
+      ${padHTML({letters:[...new Set(String(q.stem).match(/[a-z]/g)||[])],small:true,locked:o.locked})}
     </div>`;
     const inp=$("#ans",host);inp.value=arMath(o.init||"");
     const sync=()=>o.onChange&&o.onChange(!!inp.value.trim());
@@ -540,12 +575,8 @@ function mountWidget(q,host,o){
     inp.addEventListener("compositionend",()=>{local();sync();});
     inp.addEventListener("blur",local);
     inp.addEventListener("keydown",e=>{if(e.key==="Enter"&&inp.value.trim()){e.preventDefault();o.onEnter&&o.onEnter();}});
-    host.querySelectorAll(".keys button").forEach(b=>b.onclick=()=>{
-      const k=b.dataset.k,s=inp.selectionStart??inp.value.length,e=inp.selectionEnd??s;
-      if(k==="⌫"){const a=s===e?Math.max(0,s-1):s;inp.value=inp.value.slice(0,a)+inp.value.slice(e);inp.setSelectionRange(a,a);}
-      else{const ins=/^[a-z\u0621-\u064A²().٫]$/.test(k)?k:` ${k} `;inp.value=inp.value.slice(0,s)+ins+inp.value.slice(e);const p=s+ins.length;inp.setSelectionRange(p,p);}
-      inp.focus();sync();
-    });
+    /* «أ ب ج»: give the phone keyboard back (and take it away again) */
+    bindPad($(".mpad",host),inp,b=>{const dev=inp.getAttribute("inputmode")==="none";inp.blur();if(dev)inp.removeAttribute("inputmode");else inp.setAttribute("inputmode","none");b.textContent=dev?arMath("123"):"أ ب ج";setTimeout(()=>inp.focus(),30);});
     if(!o.locked&&!matchMedia("(pointer: coarse)").matches)setTimeout(()=>inp.focus(),30);
     return{value:()=>inp.value.trim(),ready:()=>!!inp.value.trim()};
   }
@@ -1060,29 +1091,6 @@ ${AR_MATH?`- اكتب الرياضيات بترميز الكتاب المدرس�
 إذا لاحظت في كلام الطالب خطأً مفاهيمياً من المكتبة، أضف في آخر ردك وفي سطر منفصل: <<misconception:ID>> (مثل m03). لا تشرح الوسم ولا تذكره.`;
 let sampleFn,imgOK=false;
 const CHAT={busy:false,stream:"",ctl:null,err:"",file:null,prefill:"",pad:null};
-/* ---------- maths keyboard (chat): digits, operations and symbols in the school notation ----------
-   Opened with the «١٢٣» button. While it is open the phone keyboard stays closed (inputmode="none");
-   «أ ب ج» gives the phone keyboard back. On a computer both work together.
-   Each key: t = text put at the cursor · lab/html = what the key shows · cap = small caption. */
-const PAD_KEY="nibras.pad";
-function padDefault(){try{const v=localStorage.getItem(PAD_KEY);if(v==="1")return true;if(v==="0")return false;}catch(e){}return matchMedia("(pointer: fine)").matches&&innerWidth>=700;}
-function padRows(){
-  const d=n=>({t:arMath(String(n)),cls:"dig"}),v=c=>({t:arMath(c),cls:"sym"}),R=AR_MATH;
-  const open={t:"(",html:`<span dir="${R?"rtl":"ltr"}">(</span>`,cls:"sym"},close={t:")",html:`<span dir="${R?"rtl":"ltr"}">)</span>`,cls:"sym"};
-  const lt={t:" < ",html:`<span dir="${R?"rtl":"ltr"}">&lt;</span>`,cap:"أصغر من",cls:"sym"},gt={t:" > ",html:`<span dir="${R?"rtl":"ltr"}">&gt;</span>`,cap:"أكبر من",cls:"sym"};
-  return [
-    [...(R?[close,open,v("z"),v("y"),v("x")]:[v("x"),v("y"),v("z"),open,close]),{act:"del",html:"⌫",cap:"امسح",cls:"del"}],
-    [{t:"²",html:`<span dir="${R?"rtl":"ltr"}">▢<sup>${arMath("2")}</sup></span>`,cap:"تربيع",cls:"sym"},{t:"/",html:'<span class="frac"><span>▢</span><span>▢</span></span>',cap:"كسر",cls:"sym"},d(7),d(8),d(9),{t:" ÷ ",lab:"÷",cap:"قسمة",cls:"op"}],
-    [{t:"³",html:`<span dir="${R?"rtl":"ltr"}">▢<sup>${arMath("3")}</sup></span>`,cap:"تكعيب",cls:"sym"},{t:R?"٪":"%",cap:"بالمئة",cls:"sym"},d(4),d(5),d(6),{t:" × ",lab:"×",cap:"ضرب",cls:"op"}],
-    [{t:"√",cap:"جذر",cls:"sym"},{t:" : ",lab:":",cap:"نسبة",cls:"sym"},d(1),d(2),d(3),{t:"−",cap:"طرح",cls:"op"}],
-    [R?lt:gt,R?gt:lt,d(0),{t:R?"٫":".",cap:"فاصلة",cls:"dig"},{t:" = ",lab:"=",cap:"يساوي",cls:"op"},{t:" + ",lab:"+",cap:"جمع",cls:"op"}],
-    [{t:"|",cap:"قيمة مطلقة",cls:"sym"},{t:" ",lab:"مسافة",cls:"wide"},{act:"abc",lab:"أ ب ج",cls:"abc",cap:""}]
-  ];
-}
-function padHTML(){
-  return `<div class="mpadbox"><div class="mpad" id="mpad" role="group" aria-label="لوحة الأرقام والرموز">${padRows().map(r=>r.map(k=>
-    `<button type="button" class="${k.cls||""}" ${k.act?`data-act="${k.act}"`:`data-t="${esc(k.t)}"`} aria-label="${esc(k.cap||k.lab||k.t)}">${k.html||esc(k.lab||k.t)}${k.cap?`<small>${k.cap}</small>`:""}</button>`).join("")).join("")}</div></div>`;
-}
 function refreshAI(){if(!READY)return;const r=route();if(!S)return;if(r==="ask")drawChat();else if(r==="result")vResult();else if(r==="play"&&G)drawGame();}
 NibrasAI.get().then(s=>{sampleFn=s||null;if(s&&s.limits)s.limits().then(l=>{imgOK=!!(l&&l.images);if(READY&&route()==="ask"&&S)drawChat();}).catch(()=>{});refreshAI();}).catch(()=>{sampleFn=null;refreshAI();});
 function context(){
@@ -1184,18 +1192,9 @@ function drawChat(){
   prev();
   const pt=$("#padt");
   if(pt)pt.onclick=()=>{CHAT.pad=!CHAT.pad;try{localStorage.setItem(PAD_KEY,CHAT.pad?"1":"0");}catch(e){}const keep=cin.value;drawChat();const c2=$("#cin");c2.value=keep;c2.dispatchEvent(new Event("input"));c2.focus();c2.setSelectionRange(keep.length,keep.length);
-    const m2=$("#mpad");if(m2&&m2.getBoundingClientRect().bottom>innerHeight-70)m2.scrollIntoView({block:"end",behavior:"smooth"});};
-  const mp=$("#mpad");
-  if(mp){
-    const put=t=>{let s=cin.selectionStart??cin.value.length,e=cin.selectionEnd??s;const v=cin.value;
-      if(t[0]===" "&&(s===0||/\s/.test(v[s-1])))t=t.slice(1);          /* no double spaces around an operation */
-      if(t.length>1&&t[t.length-1]===" "&&/\s/.test(v[e]||""))t=t.slice(0,-1);
-      cin.value=v.slice(0,s)+t+v.slice(e);const p=s+t.length;cin.focus();cin.setSelectionRange(p,p);cin.dispatchEvent(new Event("input"));};
-    const del=()=>{const s=cin.selectionStart??cin.value.length,e=cin.selectionEnd??s,a=s===e?Math.max(0,s-1):s;cin.value=cin.value.slice(0,a)+cin.value.slice(e);cin.focus();cin.setSelectionRange(a,a);cin.dispatchEvent(new Event("input"));};
-    mp.addEventListener("mousedown",e=>e.preventDefault());           /* the text box keeps the cursor */
-    mp.querySelectorAll("button").forEach(b=>b.onclick=()=>{
-      if(b.dataset.act==="del")del();else if(b.dataset.act==="abc")pt.click();else put(b.dataset.t);beep("pop");});
-  }
+    const m2=$(".chat .mpad");if(m2&&m2.getBoundingClientRect().bottom>innerHeight-70)m2.scrollIntoView({block:"end",behavior:"smooth"});};
+  const mp=$(".chat .mpad");
+  if(mp)bindPad(mp,cin,()=>pt.click());
   app.querySelectorAll(".suggest button").forEach(b=>b.onclick=()=>send(b.dataset.s));
   const st=$("#stop");if(st)st.onclick=()=>CHAT.ctl&&CHAT.ctl.abort();
   const cl=$("#clr");if(cl)cl.onclick=()=>{if(CHAT.busy&&CHAT.ctl)CHAT.ctl.abort();S.chat.turns=[];CHAT.err="";save();drawChat();};

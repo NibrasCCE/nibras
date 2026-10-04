@@ -442,4 +442,11 @@ body:not(.has-tabs) .tabbar{display:none!important}
 .mpad .wide{grid-column:span 4;font-family:var(--f-body);font-size:.9rem;color:var(--ink-2)}
 .mpad .abc{font-family:var(--f-body);font-size:.95rem;background:var(--brand);color:var(--on-brand);border-color:var(--brand)}
 .mpad .frac{font-size:.62em;margin:0}
+.mpad button:disabled{opacity:.45;cursor:default}
+/* the same keyboard under the «اكتب جوابك» box of a question */
+.ansbox .mpadbox{border:1px solid var(--line);border-radius:16px}
+.mpad.sm{max-width:460px;padding:8px}
+.mpad.sm button{height:42px;font-size:1.15rem}
+@media (max-width:700px){.game .mpad.sm button{height:38px}.game .mpad.sm{gap:4px;padding:6px}}
+@media (max-width:700px) and (max-height:760px){.mpad.sm button{height:38px}.mpad.sm button small{display:none}}
 .mpad sup{font-size:.6em}
