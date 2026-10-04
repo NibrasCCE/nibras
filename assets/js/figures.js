@@ -21,6 +21,10 @@ const FIG=(function(){
     return T(x,y-z*.62,N(a),{size:z,fill:c})+`<line x1="${r1(x-w/2)}" y1="${r1(y)}" x2="${r1(x+w/2)}" y2="${r1(y)}" stroke="${c}" stroke-width="1.6" stroke-linecap="round"/>`+T(x,y+z*.72,N(b),{size:z,fill:c});};
   const svg=(W,H,body,label,maxW)=>`<svg class="figsvg" viewBox="0 0 ${r1(W)} ${r1(H)}" style="max-width:${Math.round(maxW||W*1.25)}px" role="img" aria-label="${label}">${body}</svg>`;
   const nums=s=>String(s||"").split(",").map(x=>parseInt(x,10)).filter(x=>x>0);
+  /* the decimal mark is drawn (not typed), so it looks like the comma of the school book in every font */
+  const CM=(x,y,col,k)=>{k=k||1;return AR?`<path d="M${r1(x+1.2*k)} ${r1(y-1*k)}q${r1(1.6*k)} ${r1(4.6*k)} ${r1(-3.4*k)} ${r1(7.4*k)}" fill="none" stroke="${col}" stroke-width="${r1(2.7*k)}" stroke-linecap="round"/>`:`<circle cx="${r1(x)}" cy="${r1(y+2*k)}" r="${r1(1.9*k)}" fill="${col}"/>`;};
+  /* a decimal number as written in data.js ("9.63"): its digits, how many are before the mark, how many after */
+  const dec=s=>{const m=String(s||"").match(/^(\d+)(?:\.(\d+))?$/);return m?{digits:(m[1]+(m[2]||"")).split("").map(Number),dp:m[1].length,places:(m[2]||"").length,val:parseFloat(s)}:null;};
   const frac=s=>{const m=String(s||"").match(/^(\d+)\/(\d+)$/);return m?[+m[1],+m[2]]:null;};
 
   /* --- factor tree: at every branch the prime goes to one side (in a lamp circle), the rest keeps going down --- */
@@ -119,6 +123,73 @@ const FIG=(function(){
           if(d===1)g+=T(W/2,y+rh/2,"واحد صحيح",{size:13,rtl:true,fill:h===0?"var(--on-lamp)":"var(--ink)"});
           else if(k===0||h>=0)g+=F(x+cw/2,y+rh/2+.5,1,d,{size:10,fill:h===0?"var(--on-lamp)":"var(--ink)"});}});
       return{svg:svg(W,H,g,"لوحة الكسور: واحد صحيح، أنصاف، أثلاث، أرباع، أسداس، أثمان",380),cap:hl.length?"":"لوحة الكسور: كل صف هو الواحد الصحيح نفسه، مقسوماً إلى أجزاء متساوية."};}
+    ,
+    /* --- long division, laid out as in the school book: divisor on the left of the bracket,
+           quotient above the dividend, the minus sign to the right of every subtracted number --- */
+    ldiv(arg){const p=String(arg||"").split(","),A=dec(p[0]),d=parseInt(p[1],10);if(!A||!d||d<1)return null;
+      const digs=A.digits.slice(),q=[],steps=[];let cur=0,started=false,extra=0;
+      for(let i=0;;i++){
+        if(i>=digs.length){if(cur===0||extra>=4)break;digs.push(0);extra++;}
+        cur=cur*10+digs[i];const qd=Math.floor(cur/d);
+        if(qd>0||started||i>=A.dp-1){q[i]=qd;started=true;}
+        if(qd>0){steps.push({col:i,prod:qd*d,rem:cur-qd*d});cur-=qd*d;}
+      }
+      const cw=22,rh=25,ds=String(d),pad=12,x0=pad+ds.length*13+18,X=c=>x0+c*cw+cw/2,n=digs.length,yq=16,yl=30,yd=46;
+      const W=x0+n*cw+30,H=yd+steps.length*2*rh+16;let g="";
+      const comma=y=>CM(x0+A.dp*cw,y+5,"var(--ink-2)");
+      const numAt=(str,col,y,o)=>{let h="";str.split("").forEach((ch,k)=>{h+=T(X(col-str.length+1+k),y,N(ch),o);});return h;};
+      q.forEach((v,i)=>{if(v!==undefined)g+=T(X(i),yq,N(v),{size:17,fill:"var(--brand-text)"});});
+      if(q.length>A.dp)g+=comma(yq);
+      A.digits.forEach((v,i)=>{g+=T(X(i),yd,N(v),{size:17});});
+      if(A.places)g+=comma(yd);
+      g+=T(x0-10-ds.length*6.5,yd,N(ds),{size:17});
+      g+=`<path d="M${pad-2} ${yd+13}H${x0-5}V${yl}H${r1(x0+Math.max(A.digits.length,q.length)*cw+4)}" fill="none" stroke="var(--brand-text)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`;
+      let y=yd;
+      steps.forEach((s,k)=>{const ps=String(s.prod),nx=steps[k+1];
+        y+=rh;g+=numAt(ps,s.col,y,{size:17})+T(X(s.col)+cw*.95,y,"−",{size:16,fill:"var(--ink-2)"});
+        const len=Math.max(ps.length,String(s.rem).length+(nx?nx.col-s.col:0));
+        g+=`<line x1="${r1(X(s.col-ps.length+1)-cw/2)}" y1="${y+12}" x2="${r1(X(nx?nx.col:s.col)+cw/2)}" y2="${y+12}" stroke="var(--brand-text)" stroke-width="1.8" stroke-linecap="round"/>`;
+        y+=rh;let rs=String(s.rem),end=s.col;
+        if(nx){for(let c=s.col+1;c<=nx.col;c++)rs+=String(digs[c]);end=nx.col;}
+        g+=numAt(rs,end,y,{size:17,fill:nx?"var(--ink)":"var(--ink-2)"});});
+      const qs=q.filter(v=>v!==undefined),first=q.findIndex(v=>v!==undefined),ip=q.slice(first,A.dp).join("")||"0",dp=q.slice(A.dp).join("");
+      return{svg:svg(W,H,g,`القسمة الطويلة: ${N(p[0])} على ${N(d)}`,W*1.45),cap:`${p[0]} ÷ ${d} = ${ip}${dp?"."+dp:""}`};},
+    /* --- vertical multiplication as in the book: multiply as whole numbers (the sign on the right), then place the decimal mark --- */
+    vmul(arg){const p=String(arg||"").split(","),A=dec(p[0]),B=dec(p[1]);if(!A||!B)return null;
+      const a=parseInt(A.digits.join(""),10),bd=String(parseInt(B.digits.join(""),10)).split("").map(Number),b=parseInt(bd.join(""),10),tot=a*b,places=A.places+B.places;
+      let ts=String(tot);while(ts.length<places+1)ts="0"+ts;const lead=ts.length-String(tot).length;
+      const parts=bd.length>1?bd.slice().reverse().map((v,k)=>String(a*v)+"0".repeat(k)):[];
+      const cols=Math.max(ts.length,String(a).length,bd.length),cw=22,rh=26,pad=10,W=pad*2+cols*cw+26,X=c=>pad+c*cw+cw/2;let g="",y=16;
+      const row=(str,yy,o,gold)=>{let h="";str.split("").forEach((ch,k)=>{h+=T(X(cols-str.length+k),yy,N(ch),Object.assign({size:17},o,gold&&k<gold?{fill:"var(--ink-3)"}:{}));});return h;};
+      const rule=yy=>`<line x1="${pad}" y1="${yy}" x2="${pad+cols*cw}" y2="${yy}" stroke="var(--brand-text)" stroke-width="2" stroke-linecap="round"/>`;
+      g+=row(String(a),y);y+=rh;g+=row(bd.join(""),y)+T(pad+cols*cw+12,y,"×",{size:17,fill:"var(--ink-2)"})+rule(y+13);
+      parts.forEach((ps,k)=>{y+=rh;g+=row(ps,y,{fill:"var(--ink-2)"});if(k===1)g+=T(pad+cols*cw+12,y,"+",{size:17,fill:"var(--ink-2)"});});
+      if(parts.length)g+=rule(y+13);
+      y+=rh+(parts.length?0:2);g+=row(ts,y,{fill:"var(--brand-text)"},lead);
+      if(places)g+=CM(pad+(cols-places)*cw,y+5,"var(--lamp)",1.15);
+      const res=String(parseFloat((A.val*B.val).toPrecision(12)));
+      return{svg:svg(W,y+20,g,`ضرب عمودي: ${N(a)} في ${N(b)}`,W*1.45),cap:places?`أضرب كما في الأعداد الصحيحة: ${a} × ${b} = ${tot}. في العددين ${places===1?"منزلة عشرية واحدة":places===2?"منزلتان عشريتان":places+" منازل عشرية"}، فالناتج ${res}.`:`${a} × ${b} = ${tot}`};},
+    /* --- how many parts of size P are there in T? whole bars cut into equal parts --- */
+    bars(arg){const p=String(arg||"").split(","),T0=parseFloat(p[0]),P=parseFloat(p[1]),hide=p[2]==="?";if(!(T0>0)||!(P>0))return null;
+      const k=Math.round(1/P),cells=Math.round(T0/P),whole=Math.ceil(T0-1e-9);if(Math.abs(k*P-1)>1e-9||whole>6||k>10)return null;
+      const cwd=k<=2?22:k<=5?12:8,bh=40,gap=10,pad=8,bw=k*cwd,W=pad*2+whole*bw+(whole-1)*gap,H=bh+pad*2+18;let g="";
+      for(let b=0;b<whole;b++)for(let c=0;c<k;c++){const on=b*k+c<cells,x=pad+b*(bw+gap)+c*cwd;
+        g+=`<rect x="${x+1}" y="${pad}" width="${cwd-2}" height="${bh}" rx="3" fill="${on?"var(--lamp)":"none"}" stroke="${on?"var(--brand-text)":"var(--ink-3)"}" stroke-width="1.5"${on?"":' stroke-dasharray="3 3"'}/>`;}
+      for(let b=0;b<whole;b++)g+=T(pad+b*(bw+gap)+bw/2,pad+bh+12,N(1),{size:12,fill:"var(--ink-2)"});
+      return{svg:svg(W,H,g,`${N(p[0])} مقسومة إلى أجزاء، كل جزء ${N(p[1])}`),cap:hide?`كم ${p[1]} في ${p[0]}؟ أعدّ الأجزاء الذهبية.`:`كم ${p[1]} في ${p[0]}؟ ${p[0]} ÷ ${p[1]} = ${cells}`};},
+    /* --- × or ÷ by 10, 100, 1000: the decimal mark hops one place for every zero --- */
+    shift(arg){const p=String(arg||"").split(","),A=dec(p[0]),m=parseInt(p[1],10),div=p[2]==="div";if(!A||![10,100,1000].includes(m))return null;
+      const k=String(m).length-1,D=A.digits.map(v=>({v,add:false}));let a=A.dp,b;
+      if(div){b=a-k;while(b<1){D.unshift({v:0,add:true});a++;b++;}}else{b=a+k;while(D.length<b)D.push({v:0,add:true});}
+      const cw=30,pad=16,W=pad*2+D.length*cw,H=76,yb=26,Bx=j=>pad+j*cw;let g="";
+      D.forEach((d,i)=>{g+=T(Bx(i)+cw/2,yb,N(d.v),{size:22,fill:d.add?"var(--lamp)":"var(--ink)"});});
+      if(A.places)g+=CM(Bx(a),yb+7,"var(--line)",1.2);
+      const s=div?-1:1;
+      for(let h=0;h<k;h++){const x1=Bx(a+s*h),x2=Bx(a+s*(h+1));g+=`<path d="M${x1} ${yb+20}Q${(x1+x2)/2} ${yb+42} ${x2} ${yb+20}" fill="none" stroke="var(--brand-text)" stroke-width="2.2" stroke-linecap="round"/>`;}
+      const xe=Bx(b);g+=`<path d="M${xe-s*7} ${yb+21}L${xe} ${yb+19}L${xe-s*1} ${yb+27}" fill="none" stroke="var(--brand-text)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`;
+      if(b<D.length)g+=CM(xe,yb+7,"var(--lamp)",1.3);
+      const res=String(parseFloat((div?A.val/m:A.val*m).toPrecision(12)));
+      return{svg:svg(W,H,g,`تحريك الفاصلة العشرية ${N(k)} منازل`,W*1.5),cap:`${p[0]} ${div?"÷":"×"} ${m} = ${res}: الفاصلة تتحرك ${k===1?"منزلة واحدة":k===2?"منزلتين":k+" منازل"} إلى ${div?"اليسار":"اليمين"}.`};}
   };
   function make(spec){
     const m=String(spec||"").match(/^([a-z]+)(?::(.*))?$/);if(!m||!KINDS[m[1]])return null;

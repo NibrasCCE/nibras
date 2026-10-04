@@ -25,6 +25,8 @@ function arNum(s){
 }
 function norm(s){
   return String(s).replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069\u0640]/g,"").replace(/٪/g,"%").replace(/[\u0621-\u064A]/g,c=>LAT_VAR[c]||c).replace(/[٠-٩٫]/g,c=>AR_DIG[c])
+    /* the school book prints the decimal mark as a comma, so «3,21» and «3،21» mean 3.21 */
+    .replace(/(\d)[,،](?=\d)/g,"$1.")
     /* a mixed number, whichever part was typed first: «2 1/2» or «1/2 2» → (2+1/2) */
     .replace(/(^|[^\/\d.])(\d+)\s+(\d+)\/(\d+)(?![\/\d.])/g,"$1($2+$3/$4)").replace(/(^|[^\/\d.(+])(\d+)\/(\d+)\s+(\d+)(?![\/\d.])/g,"$1($4+$2/$3)")
     .replace(/[−–—]/g,"-").replace(/×/g,"*").replace(/÷/g,"/")
