@@ -115,33 +115,74 @@ function arProse(raw){
   }
   return ratioRTL(out+arNum(raw.slice(last)));
 }
-/* the AI is told to write plain text, but if it still sends $LaTeX$ we unfold it */
-function texToPlain(t){
-  return String(t).replace(/\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g,"$1/$2").replace(/\\(?:times|cdot)/g,"×").replace(/\\div/g,"÷")
-    .replace(/\\(?:left|right)/g,"").replace(/\\%/g,"%").replace(/\\leq?(?![a-z])/g,"≤").replace(/\\geq?(?![a-z])/g,"≥").replace(/\\neq?(?![a-z])/g,"≠")
-    .replace(/\\sqrt\s*\{([^{}]*)\}/g,"√($1)").replace(/\\text\s*\{([^{}]*)\}/g,"$1")
-    .replace(/\^\{?2\}?/g,"²").replace(/\^\{?3\}?/g,"³").replace(/[{}\\]/g,"").replace(/-/g,"−").trim();
+/* LaTeX from the tutor ($…$) drawn in the school notation: stacked fractions, raised powers,
+   Arabic digits and letters. Only the simple commands the tutor is told to use are understood. */
+const TEX_SYM={times:"×",cdot:"×",div:"÷",le:"≤",leq:"≤",ge:"≥",geq:"≥",ne:"≠",neq:"≠",pm:"±",sum:"∑",approx:"≈",pi:"π",lt:"<",gt:">",cdots:"…",ldots:"…",dots:"…",left:"",right:"",quad:" ",qquad:" ",",":" ",";":" "," ":" ","!":""};
+function texHTML(t,depth){
+  t=String(t);depth=depth||0;if(depth>6)return esc(t);
+  const grp=i=>{let d=0;for(let j=i;j<t.length;j++){if(t[j]==="{")d++;else if(t[j]==="}"){d--;if(!d)return[t.slice(i+1,j),j+1];}}return[t.slice(i+1),t.length];};
+  const arg=i=>{while(t[i]===" ")i++;if(t[i]==="{")return grp(i);return[t[i]||"",i+1];};
+  let out="",i=0;
+  while(i<t.length){
+    const c=t[i];
+    if(c==="\\"){
+      const m=t.slice(i).match(/^\\([a-zA-Z]+|.)/)||["\\",""];const name=m[1];i+=m[0].length;
+      if(/^[dt]?frac$/.test(name)){const [x,j]=arg(i),[y,k]=arg(j);i=k;out+=`<span class="frac"><span>${texHTML(x,depth+1)}</span><span>${texHTML(y,depth+1)}</span></span>`;}
+      else if(name==="sqrt"){const [x,j]=arg(i);i=j;out+=`<span class="sqrt"><i>√</i><span>${texHTML(x,depth+1)}</span></span>`;}
+      else if(name==="overline"||name==="bar"){const [x,j]=arg(i);i=j;out+=`<span class="oline">${texHTML(x,depth+1)}</span>`;}
+      else if(name==="text"||name==="mathrm"||name==="textbf"){const [x,j]=arg(i);i=j;out+=esc(arNum(x));}
+      else if(name==="%")out+=AR_MATH?"٪":"%";
+      else out+=esc(TEX_SYM[name]!==undefined?TEX_SYM[name]:name.length===1?name:"");
+    }
+    else if(c==="^"||c==="_"){const [x,j]=arg(i+1);i=j;out+=c==="^"?`<sup>${texHTML(x,depth+1)}</sup>`:`<sub>${texHTML(x,depth+1)}</sub>`;}
+    else if(c==="{"||c==="}")i++;
+    else{let j=i;while(j<t.length&&!"\\^_{}".includes(t[j]))j++;out+=esc(arMath(t.slice(i,j).replace(/-/g,"−").replace(/\*/g,"×")));i=j;}
+  }
+  return out;
 }
 function tex(t){
-  if(AR_MATH)return mx(texToPlain(t));
+  if(AR_MATH)return `<span class="m">${ratioRTL(texHTML(String(t).trim()))}</span>`;
   try{ if(window.katex) return `<span class="m">${katex.renderToString(t,{output:"mathml",throwOnError:false})}</span>`; }catch(e){}
   return `<span class="m">${esc(t)}</span>`;
 }
 function inline(s){
-  return String(s).split(/(\$[^$\n]+\$)/g).map(p=>/^\$[^$]+\$$/.test(p)?tex(p.slice(1,-1)):mathify(p)).join("").replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>");
+  return String(s).split(/(\$\$[^$\n]+\$\$|\$[^$\n]+\$)/g).map(p=>/^\$\$[^$]+\$\$$/.test(p)?tex(p.slice(2,-2)):/^\$[^$]+\$$/.test(p)?tex(p.slice(1,-1)):mathify(p)).join("").replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>");
 }
-function md(text){
-  const lines=String(text).split("\n"); let html="",list=null,para=[];
+/* a drawing the tutor asked for: <draw>{…}</draw> (figures.js checks the numbers and draws it) */
+function drawHTML(json){
+  let d=null;try{d=JSON.parse(json);}catch(e){}
+  const g=d&&typeof FIG!=="undefined"&&FIG.draw?FIG.draw(d):"";
+  return g?`<figure class="fig chatfig">${g}</figure>`:"";
+}
+/* o.game(json): how a <game>{…}</game> tag is shown (only the chat passes it) */
+function md(text,o){
+  o=o||{};
+  const src=String(text).replace(/\s*(<game>[\s\S]*?<\/game>|<draw>[\s\S]*?<\/draw>|<image\b[^>]*\/?>)\s*/g,(_,t)=>"\n"+t.replace(/\s*\n\s*/g," ")+"\n")
+    .replace(/<(game|draw)>[^\n]*$/,"");                                   /* a tag still being written is not shown */
+  const lines=src.split("\n"); let html="",list=null,para=[],tbl=null;
   const fp=()=>{if(para.length){html+=`<p>${para.map(inline).join("<br>")}</p>`;para=[];}};
   const fl=()=>{if(list){html+=`<${list.t}>${list.items.map(i=>`<li>${inline(i)}</li>`).join("")}</${list.t}>`;list=null;}};
+  const ft=()=>{if(tbl){const rows=tbl.rows.slice(0,9).map(r=>r.slice(0,4)),head=tbl.head&&rows.length>1?rows.shift():null;
+    html+=`<div class="tblwrap"><table class="mtbl">${head?`<thead><tr>${head.map(c=>`<th>${inline(c)}</th>`).join("")}</tr></thead>`:""}<tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${inline(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;tbl=null;}};
+  const all=()=>{fp();fl();ft();};
   for(const ln of lines){
-    const o=ln.match(/^\s*([0-9٠-٩]+)[.)]\s+(.*)$/),u=ln.match(/^\s*[-•*]\s+(.*)$/);
-    if(o){fp();if(!list||list.t!=="ol"){fl();list={t:"ol",items:[]};}list.items.push(o[2]);}
+    const t=ln.trim(),gm=t.match(/^<game>(.*)<\/game>$/),dr=t.match(/^<draw>(.*)<\/draw>$/),dm=t.match(/^\$\$([^$]+)\$\$$/);
+    if(gm){all();html+=o.game?o.game(gm[1]):"";continue;}
+    if(dr){all();html+=drawHTML(dr[1]);continue;}
+    if(/^<image\b[^>]*\/?>$/.test(t)){all();continue;}                    /* no approved pictures yet */
+    if(dm){all();html+=`<div class="dmath">${tex(dm[1])}</div>`;continue;}
+    if(/^\|.*\|$/.test(t)){fp();fl();
+      if(/^\|[\s:|-]+\|$/.test(t)){if(tbl)tbl.head=true;}
+      else{if(!tbl)tbl={rows:[],head:false};tbl.rows.push(t.slice(1,-1).split("|").map(c=>c.trim()));}
+      continue;}
+    ft();
+    const ol=ln.match(/^\s*([0-9٠-٩]+)[.)]\s+(.*)$/),u=ln.match(/^\s*[-•*]\s+(.*)$/);
+    if(ol){fp();if(!list||list.t!=="ol"){fl();list={t:"ol",items:[]};}list.items.push(ol[2]);}
     else if(u){fp();if(!list||list.t!=="ul"){fl();list={t:"ul",items:[]};}list.items.push(u[1]);}
-    else if(!ln.trim()){fp();fl();}
-    else{fl();para.push(ln);}
+    else if(!t){fp();fl();}
+    else{fl();para.push(ln.replace(/^#{1,4}\s+/,""));}
   }
-  fp();fl();return html;
+  all();return html;
 }
 const today=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");};
 const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
@@ -1090,7 +1131,7 @@ ${AR_MATH?`- اكتب الرياضيات بترميز الكتاب المدرس�
 # وسم خفي (للنظام فقط)
 إذا لاحظت في كلام الطالب خطأً مفاهيمياً من المكتبة، أضف في آخر ردك وفي سطر منفصل: <<misconception:ID>> (مثل m03). لا تشرح الوسم ولا تذكره.`;
 let sampleFn,imgOK=false;
-const CHAT={busy:false,stream:"",ctl:null,err:"",file:null,prefill:"",pad:null};
+const CHAT={busy:false,stream:"",ctl:null,err:"",file:null,prefill:"",pad:null,gsave:null};
 function refreshAI(){if(!READY)return;const r=route();if(!S)return;if(r==="ask")drawChat();else if(r==="result")vResult();else if(r==="play"&&G)drawGame();}
 NibrasAI.get().then(s=>{sampleFn=s||null;if(s&&s.limits)s.limits().then(l=>{imgOK=!!(l&&l.images);if(READY&&route()==="ask"&&S)drawChat();}).catch(()=>{});refreshAI();}).catch(()=>{sampleFn=null;refreshAI();});
 function context(){
@@ -1109,6 +1150,103 @@ function context(){
   SKILLS.forEach(s=>L.push(`- ${s.title} (${LV[s.lv].name}): ${arProse(s.explanation)} مثال: ${arProse(s.example)}${s.learn?" قواعد الكتاب المدرسي لهذه المهارة (التزم بطريقتها ومصطلحاتها عند الشرح): "+s.learn.map(arProse).join(" "):""}`));
   return L.join("\n");
 }
+/* ---------- games inside the chat ----------
+   The tutor writes <game>{"type":…}</game>. The site builds the game from one of its own widgets,
+   works out the right answer itself, and sends the result back as a «[نتيجة لعبة] …» message.
+   A tag that breaks a rule (see the tutor's instructions) is simply not shown. */
+const GAME_NAME={balance:"ميزان المعادلة",numberline:"الضفدع على خط الأعداد",bar:"تلوين الشريط",order:"ترتيب البطاقات",bubbles:"فرقعة الفقاعة"};
+const GAME_WIDGET={balance:"type",numberline:"hop",bar:"shade",order:"order",bubbles:"bubbles"};
+/* what the tutor wrote («2س+3=7», «5س^2», «-3+5») → the notation of data.js («2x + 3 = 7») */
+function canonExpr(raw){
+  const t=String(raw).replace(/[‎‏ـ]/g,"").replace(/٪/g,"%").replace(/[٠-٩٫]/g,c=>AR_DIG[c]).replace(/[ء-ي]/g,c=>LAT_VAR[c]||c)
+    .replace(/[−–—]/g,"-").replace(/\*/g,"×").replace(/\^2/g,"²").replace(/\^3/g,"³").replace(/\^4/g,"⁴").replace(/\^5/g,"⁵").replace(/\s+/g,"").toLowerCase();
+  return t.replace(/([+×÷=])/g," $1 ").replace(/([0-9a-z)²³⁴⁵%])-/g,"$1 − ").replace(/-/g,"−");
+}
+const gval=x=>{const n=norm(x);if(/%$/.test(n)){const v=parseFloat(n);return isFinite(v)?v/100:NaN;}const c=compile(n);return c&&!c.vars.size?c.f({}):NaN;};
+function buildGame(json){
+  let g;try{g=JSON.parse(json);}catch(e){return null;}
+  if(!g||typeof g!=="object"||!GAME_NAME[g.type])return null;
+  const fnum=v=>{const r=Math.round(v*1e6)/1e6;return(r<0?"−":"")+String(Math.abs(r));},type=g.type;
+  try{
+    if(type==="balance"){
+      const eq=norm(g.equation||""),sides=eq.split("=");if(sides.length!==2)return null;
+      const L=compile(sides[0]),R=compile(sides[1]);if(!L||!R)return null;
+      const vs=[...new Set([...L.vars,...R.vars])];if(vs.length!==1)return null;
+      const v=vs[0],f=x=>L.f({[v]:x})-R.f({[v]:x}),b=f(0),a=f(1)-b;
+      if(!isFinite(a)||!isFinite(b)||Math.abs(a)<1e-9||!close(f(2),2*a+b)||!close(f(-3),-3*a+b))return null;   /* linear, one solution */
+      const sol=-b/a;let den=0;for(let d=1;d<=12;d++)if(close(sol*d,Math.round(sol*d))){den=d;break;}
+      if(!den||Math.abs(sol)>1000)return null;
+      const num=Math.round(sol*den),ans=den===1?fnum(num):`${num<0?"−":""}${Math.abs(num)}/${den}`;
+      return{type,key:"balance:"+eq,label:"المعادلة",detail:String(g.equation),correct:ans,
+        q:{type:"type",scale:true,skill:"s7d",stem:"أحلّ المعادلة: "+canonExpr(g.equation),answer:`${v} = ${ans}`},
+        ok:val=>same(parseAns(val),parseAns(`${v}=${ans}`)),text:val=>String(val)};
+    }
+    if(type==="numberline"){
+      const ex=norm(g.expression||""),c=compile(ex);if(!c||c.vars.size)return null;
+      const v=c.f({}),st=parseInt((ex.match(/^\(?(-?\d+)/)||[])[1],10);
+      if(!Number.isInteger(v)||Math.abs(v)>10||!Number.isInteger(st)||Math.abs(st)>10||st===v)return null;
+      return{type,key:"numberline:"+ex,label:"المقدار",detail:String(g.expression),correct:fnum(v),
+        q:{type:"hop",start:st,answer:v,stem:"أجد الناتج على خط الأعداد: "+canonExpr(g.expression)},ok:val=>val===v,text:val=>fnum(val)};
+    }
+    if(type==="bar"){
+      const v=gval(String(g.value||"")),n=g.parts;if(!Number.isInteger(n)||n<2||n>20||!(v>0)||v>1+1e-9)return null;
+      const k=v*n;if(!close(k,Math.round(k)))return null;const ans=Math.round(k);
+      return{type,key:`bar:${norm(g.value)}:${n}`,label:"المطلوب",detail:`تلوين ${g.value} من شريط فيه ${n} أجزاء`,correct:`${ans} من ${n}`,
+        q:{type:"shade",n,answer:ans,stem:`أظلّل ${canonExpr(g.value)} من الشريط.`},ok:val=>val===ans,text:val=>`لوّن ${val} من ${n}`};
+    }
+    if(type==="order"){
+      const items=Array.isArray(g.items)?g.items.map(String):[];if(items.length<3||items.length>6)return null;
+      const vals=items.map(gval);if(vals.some(x=>!isFinite(x)))return null;
+      for(let i=0;i<vals.length;i++)for(let j=i+1;j<vals.length;j++)if(close(vals[i],vals[j]))return null;
+      const disp=items.map(canonExpr),sorted=disp.slice().sort((a,b)=>gval(a)-gval(b));
+      return{type,key:"order:"+items.map(norm).join(","),label:"الأعداد",detail:items.join(" ، "),correct:sorted.join(" ، "),
+        q:{type:"order",items:disp,stem:"أرتّب الأعداد من الأصغر إلى الأكبر:"},ok:val=>val.every((x,i)=>i===0||gval(val[i-1])<gval(x)),text:val=>val.join(" ، ")};
+    }
+    if(type==="bubbles"){
+      const qs=String(g.question||""),opts=Array.isArray(g.options)?g.options.map(String):[];if(opts.length<2||opts.length>4)return null;
+      const pq=parseAns(qs);if(!pq)return null;
+      const oks=opts.map(o=>{const po=parseAns(o);return!!po&&same(po,pq);});if(oks.filter(Boolean).length!==1)return null;
+      return{type,key:"bubbles:"+norm(qs)+":"+opts.map(norm).join(","),label:"السؤال",detail:qs,correct:opts[oks.indexOf(true)],
+        q:{type:"bubbles",stem:"أختار ما يساوي: "+canonExpr(qs),options:opts.map((o,i)=>({t:canonExpr(o),ok:oks[i]}))},ok:val=>!!oks[val],text:val=>opts[val]};
+    }
+  }catch(e){}
+  return null;
+}
+let GAME_LIVE=null;
+function gameHTML(json,live){
+  const sp=buildGame(json);if(!sp)return"";
+  const head=`<div class="ghead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${TYPE_IC[GAME_WIDGET[sp.type]]}</svg>${GAME_NAME[sp.type]}</div>`;
+  if(!live||GAME_LIVE)return `<div class="gamecard done">${head}<p class="small">${mathify(sp.q.stem)}</p></div>`;
+  GAME_LIVE=sp;
+  return `<div class="gamecard" id="glive">${head}${sp.q.scale?scaleSVG(sp.q.stem):""}<p class="stem">${mathify(sp.q.stem)}</p><div id="gw"></div>
+    <div class="row between"><button class="btn btn-line btn-sm" id="gskip" type="button">مش عارف</button><button class="btn btn-go" id="ggo" type="button" disabled>تحقّق</button></div></div>`;
+}
+/* the student's own game result in the chat: the answer and right/wrong, never the correct answer */
+function gresHTML(c){
+  const p=String(c).split("|").map(x=>x.trim()),name=p[0].replace("[نتيجة لعبة]","").trim(),get=k=>{const f=p.find(x=>x.startsWith(k));return f?f.slice(k.length).trim():"";};
+  const ans=get("جواب الطالب:"),skip=/مش عارف/.test(ans),ok=/^صح/.test(get("النتيجة:"));
+  return `<div class="gres"><b>${esc(name)}</b><span>${skip?"ضغطت «مش عارف»":"جوابي: "+mathify(ans)}</span>${skip?"":`<span class="tag ${ok?"ok":"no"}">${ok?"صح ✓":"مش مزبوط ✗"}</span>`}</div>`;
+}
+/* what the page tells the tutor with every message when the instructions live on the server (Supabase) */
+function chatCtx(){
+  if(isGuest())return{level:"L7"};
+  const d=S.diag,c=d?currentSkill():null;
+  return{level:d&&d.start&&skillById[d.start]?skillById[d.start].lv:undefined,skill:c?c.id:undefined,mis:Object.entries(S.detected).sort((a,b)=>b[1]-a[1]).map(x=>x[0]).filter(id=>misById[id]).slice(0,5)};
+}
+function siteContext(){
+  const L=["[سياق من الموقع، وليس من كلام الطالب]"];
+  if(isGuest())L.push("- هذه جلسة تجريبية: الزائر معلم يختبر نبراس، وقد يكتب كأنه طالب. تصرّف تماماً كما تتصرف مع طالب في الصف السابع.","- لا تقترح لعبة التشخيص ولا المسار، فالزائر ليس له حساب طالب.");
+  else{
+    L.push(`- الاسم المستعار للطالب: ${ME().nick}`);
+    if(!S.diag)L.push("- لم يلعب لعبة التشخيص بعد. إذا طلب مساعدة عامة اقترح عليه لعبة التشخيص بلطف.");
+    const c=S.diag?currentSkill():null;
+    if(c)L.push(`- المحطة الحالية في مساره: ${c.title} (${LV[c.lv].name}). ${arProse(c.explanation)}${c.learn?" طريقة الكتاب المدرسي لهذه المهارة (التزم بها وبمصطلحاتها): "+c.learn.map(arProse).join(" "):""}`);
+  }
+  L.push("","# مكتبة الأخطاء المفاهيمية");
+  MIS.forEach(m=>L.push(`- ${m.id}: ${m.title}. مثال: ${arProse(m.example)}`));
+  L.push("","# وسم خفي (للموقع فقط)","إذا دلّ كلام الطالب بوضوح على خطأ مفاهيمي من المكتبة، أضف سطراً منفصلاً فيه: <<misconception:ID>> (مثل <<misconception:m03>>)، قبل أي وسم لعبة. الطالب لا يرى هذا السطر، فلا تشرحه ولا تذكره.");
+  return L.join("\n");
+}
 const vis=t=>String(t).replace(/<<[^>]*>>/g,"").replace(/<<[^>]*$/,"").replace(/<$/,"").trim();
 async function send(text){
   text=String(text||"").trim();const file=CHAT.file;
@@ -1120,11 +1258,15 @@ async function send(text){
   CHAT.file=null;CHAT.busy=true;CHAT.stream="";CHAT.err="";save();drawChat();
   const hist=S.chat.turns.slice(-16).map(x=>({role:x.role,content:x.content}));
   while(hist.length&&hist[0].role!=="user")hist.shift();
-  const input=[{role:"user",content:PROMPT+"\n\n"+context()},...hist];
+  /* on Supabase the tutor's instructions are added by the Edge Function; the page sends its context and a few codes.
+     Without a server (local demo) the older instructions in this file are used. */
+  const edge=Store.mode==="supabase"&&!(window.claude&&typeof window.claude.use==="function");
+  const input=edge?[{role:"user",content:siteContext()},...hist]:[{role:"user",content:PROMPT+"\n\n"+context()},...hist];
   const ctl=new AbortController();CHAT.ctl=ctl;
   try{
     const opts={cache:false,signal:ctl.signal,onText:({text})=>{CHAT.stream=vis(text);paintStream();}};
     if(file)opts.images=file;
+    if(edge){opts.kind="chat";opts.ctx=chatCtx();}
     const res=await sampleFn(input,opts);
     [...String(res.text).matchAll(/<<\s*misconception\s*:\s*(m\d{2})\s*>>/gi)].forEach(m=>bump(m[1].toLowerCase()));
     S.chat.turns.push({role:"assistant",content:vis(res.text)+(res.truncated?"\n\n(انقطع الرد، اطلب مني أكمّل)":"")});
@@ -1151,6 +1293,7 @@ function drawChat(){
   const turns=S.chat.turns;
   const guest=isGuest();
   if(CHAT.pad===null)CHAT.pad=padDefault();
+  GAME_LIVE=null;
   const pad=CHAT.pad&&!off;
   const welcome=guest?`أهلاً! أنا نبراس، المعلم الافتراضي. اسألني سؤال رياضيات كأنك طالب بالصف السابع، وشوف كيف بفكّر معك خطوة خطوة بدل ما أعطيك الحل جاهز.`
     :`أهلاً ${ME().nick}! أنا نبراس. احكيلي شو السؤال اللي محيّرك، وبنفكّر فيه سوا خطوة خطوة. ما رح أعطيك الحل جاهز، بس رح أضل معك لحد ما توصل.`;
@@ -1161,7 +1304,9 @@ function drawChat(){
         ${turns.length?`<button class="btn btn-line btn-sm" id="clr" type="button">محادثة جديدة</button>`:""}</div>
       <div class="msgs" id="msgs" aria-live="polite">
         <div class="msg bot">${md(welcome)}</div>
-        ${turns.map(x=>`<div class="msg ${x.role==="user"?"me":"bot"}">${md(x.content.replace(/\n\[أرفق الطالب صورة لحلّه المكتوب\]$/,"\n(📷 صورة الحل)"))}</div>`).join("")}
+        ${turns.map((x,i)=>x.role==="user"
+          ?`<div class="msg me">${/^\[نتيجة لعبة\]/.test(x.content)?gresHTML(x.content):md(x.content.replace(/\n\[أرفق الطالب صورة لحلّه المكتوب\]$/,"\n(📷 صورة الحل)"))}</div>`
+          :`<div class="msg bot">${md(x.content,{game:j=>gameHTML(j,i===turns.length-1&&!CHAT.busy&&!off)})}</div>`).join("")}
         ${CHAT.busy?`<div class="msg bot" id="live"></div>`:""}
       </div>
       ${!turns.length&&!off?`<div class="suggest">${["ما فهمت قسمة الكسور","ليش −4 − 3 = −7؟","كيف بحل 2x − 3 = 11؟"].map(s=>`<button type="button" data-s="${esc(arProse(s))}">${mathify(s)}</button>`).join("")}</div>`:""}
@@ -1176,13 +1321,26 @@ function drawChat(){
         `<button class="iconbtn send" type="submit" aria-label="أرسل" ${off||loading?"disabled":""}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H5M11 6l-6 6 6 6"/></svg></button>`}
       </form>
       <div class="mprev" id="mprev" hidden><span>هيك رح تظهر:</span><span id="mpv"></span></div>
-      ${pad?padHTML():""}
+      ${pad?`<div id="cpad">${padHTML()}</div>`:""}
     </div>
     <p class="draft">نبراس نموذج ذكاء اصطناعي وممكن يغلط. ${guest?"المحادثة ما بتنحفظ. عدد الرسائل باليوم محدود.":(Store.mode==="local"?"المحادثة محفوظة على هذا الجهاز فقط.":"المحادثة محفوظة بحسابك.")+" "+DAILY_LIMIT+" رسالة باليوم."}</p>
   </section>`;
   const cin=$("#cin");
   cin.value=CHAT.prefill||draft;CHAT.prefill="";
   if(CHAT.busy)paintStream();
+  /* wide messages (game, drawing, table) use the full width; then the live game is mounted */
+  app.querySelectorAll("#msgs .msg").forEach(m=>{if(m.querySelector(".gamecard:not(.done),.chatfig,.tblwrap"))m.classList.add("wide");});
+  if(GAME_LIVE&&$("#gw")){
+    const sp=GAME_LIVE,go=$("#ggo"),sk=$("#gskip"),keep=["type","hop","shade"].includes(sp.q.type);
+    const w=mountWidget(sp.q,$("#gw"),{mode:"practice",init:keep&&CHAT.gsave&&CHAT.gsave.key===sp.key?CHAT.gsave.val:undefined,
+      onChange:ok=>{go.disabled=!ok;if(keep)CHAT.gsave=ok?{key:sp.key,val:w.value()}:null;},onEnter:()=>{if(!go.disabled)go.click();}});
+    go.disabled=!w.ready();
+    const tries=()=>1+turns.filter(t=>t.role==="user"&&t.content.startsWith("[نتيجة لعبة]")&&t.content.includes(`| ${sp.label}: ${sp.detail} |`)).length;
+    const finish=(val,skip)=>{go.disabled=true;sk.disabled=true;CHAT.gsave=null;const ok=!skip&&sp.ok(val);if(!skip)beep(ok?"ding":"soft");
+      send(`[نتيجة لعبة] ${GAME_NAME[sp.type]} | ${sp.label}: ${sp.detail} | جواب الطالب: ${skip?"ضغط «مش عارف»":sp.text(val)}${skip?"":` | النتيجة: ${ok?"صح":"غلط"} (المحاولة ${tries()})`} | الجواب الصح: ${sp.correct}`);};
+    go.onclick=()=>{if(w.ready())finish(w.value(),false);};
+    sk.onclick=()=>finish(null,true);
+  }
   const box=$("#msgs");box.scrollTop=box.scrollHeight;
   $("#cf").addEventListener("submit",e=>{e.preventDefault();const v=cin.value;cin.value="";send(v);});
   cin.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();$("#cf").requestSubmit();}});
@@ -1192,8 +1350,8 @@ function drawChat(){
   prev();
   const pt=$("#padt");
   if(pt)pt.onclick=()=>{CHAT.pad=!CHAT.pad;try{localStorage.setItem(PAD_KEY,CHAT.pad?"1":"0");}catch(e){}const keep=cin.value;drawChat();const c2=$("#cin");c2.value=keep;c2.dispatchEvent(new Event("input"));c2.focus();c2.setSelectionRange(keep.length,keep.length);
-    const m2=$(".chat .mpad");if(m2&&m2.getBoundingClientRect().bottom>innerHeight-70)m2.scrollIntoView({block:"end",behavior:"smooth"});};
-  const mp=$(".chat .mpad");
+    const m2=$("#cpad .mpad");if(m2&&m2.getBoundingClientRect().bottom>innerHeight-70)m2.scrollIntoView({block:"end",behavior:"smooth"});};
+  const mp=$("#cpad .mpad");
   if(mp)bindPad(mp,cin,()=>pt.click());
   app.querySelectorAll(".suggest button").forEach(b=>b.onclick=()=>send(b.dataset.s));
   const st=$("#stop");if(st)st.onclick=()=>CHAT.ctl&&CHAT.ctl.abort();

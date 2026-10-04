@@ -307,5 +307,36 @@ const FIG=(function(){
     const m=String(spec||"").match(/^([a-z]+)(?::(.*))?$/);if(!m||!KINDS[m[1]])return null;
     try{return KINDS[m[1]](m[2]||"");}catch(e){return null;}
   }
-  return{make,primes};
+  /* --- drawings the tutor asks for in the chat with a <draw>{…}</draw> tag (app.js checks nothing: everything is checked here) ---
+     {"type":"numberline","from":-6,"to":6,"points":[-3],"jumps":[{"from":-3,"to":2}]}
+     {"type":"bar","bars":[{"parts":4,"shaded":3},{"parts":8,"shaded":6}]} */
+  function draw(d){
+    try{
+      const int=v=>Number.isInteger(v);
+      if(!d||typeof d!=="object")return"";
+      if(d.type==="numberline"){
+        const lo=d.from,hi=d.to;if(!int(lo)||!int(hi)||lo<-20||hi>20||hi-lo<4||hi-lo>20)return"";
+        const inR=v=>int(v)&&v>=lo&&v<=hi,pts=(Array.isArray(d.points)?d.points:[]).filter(inR).slice(0,6);
+        const jumps=(Array.isArray(d.jumps)?d.jumps:[]).filter(j=>j&&inR(j.from)&&inR(j.to)&&j.from!==j.to).slice(0,6);
+        const n=hi-lo,step=n>14?2:1,only=[];for(let k=lo;k<=hi;k++)if(k===lo||k===hi||k===0||(k-lo)%step===0)only.push(k);
+        pts.forEach(k=>only.includes(k)||only.push(k));jumps.forEach(j=>{[j.from,j.to].forEach(k=>only.includes(k)||only.push(k));});
+        const top=jumps.length?26+Math.min(jumps.length,3)*14:14,y=top+8,L=NL(lo,hi,y,{only,mark:pts.concat(jumps.map(j=>j.to))});let g=L.g;
+        jumps.forEach((j,i)=>{const x1=L.X(j.from),x2=L.X(j.to),s=j.to>j.from?1:-1,h=18+(i%3)*14,dv=j.to-j.from;
+          g+=`<path d="M${r1(x1)} ${y-10}Q${r1((x1+x2)/2)} ${r1(y-10-h*1.7)} ${r1(x2-s*3)} ${y-11}" fill="none" stroke="var(--brand-text)" stroke-width="2.4" stroke-linecap="round"/><path d="M${r1(x2-s*10)} ${y-15}L${r1(x2-s*2)} ${y-10}L${r1(x2-s*4)} ${y-20}" fill="none" stroke="var(--brand-text)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`
+            +T((x1+x2)/2,y-10-h-3,(dv>0?"+":"−")+N(Math.abs(dv)),{size:12,rtl:AR,fill:"var(--brand-text)"});});
+        pts.forEach(k=>{g+=`<circle cx="${r1(L.X(k))}" cy="${y}" r="5.5" fill="var(--lamp)" stroke="var(--surface)" stroke-width="2"/>`;});
+        return svg(L.W,y+34,g,`خط الأعداد من ${NEG(lo)} إلى ${NEG(hi)}`);
+      }
+      if(d.type==="bar"){
+        const bars=(Array.isArray(d.bars)?d.bars:[]).filter(b=>b&&int(b.parts)&&b.parts>=2&&b.parts<=20&&int(b.shaded)&&b.shaded>=0&&b.shaded<=b.parts).slice(0,3);if(!bars.length)return"";
+        const bw=250,bh=30,gap=14,lab=40,pad=8,W=pad*2+bw+lab,H=pad*2+bars.length*bh+(bars.length-1)*gap;let g="";
+        bars.forEach((b,r)=>{const y=pad+r*(bh+gap),cw=bw/b.parts,x0=AR?pad:pad+lab;
+          for(let k=0;k<b.parts;k++){const x=AR?x0+bw-(k+1)*cw:x0+k*cw;g+=`<rect x="${r1(x)}" y="${y}" width="${r1(cw)}" height="${bh}" fill="${k<b.shaded?"var(--lamp)":"var(--surface)"}" stroke="var(--brand-text)" stroke-width="1.4"/>`;}
+          g+=`<rect x="${x0}" y="${y}" width="${bw}" height="${bh}" fill="none" stroke="var(--brand-text)" stroke-width="2.2" rx="3"/>`+F(AR?W-pad-lab/2+4:pad+lab/2-4,y+bh/2,b.shaded,b.parts,{size:12});});
+        return svg(W,H,g,"شريط الكسور: "+bars.map(b=>`${N(b.shaded)} من ${N(b.parts)}`).join("، "));
+      }
+    }catch(e){}
+    return"";
+  }
+  return{make,primes,draw};
 })();

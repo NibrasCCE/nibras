@@ -11,7 +11,19 @@
 //   NIBRAS_DAILY_LIMIT       (optional)  AI messages per user per day (default 60)
 //   NIBRAS_ALLOWED_ORIGINS   (optional)  e.g. https://name.github.io  (comma-separated; default *)
 // Deploy with "Verify JWT" OFF — this function checks the user itself.
+//
+// Chat requests ({kind:"chat"}) get the tutor's instructions from
+// nibras-system-prompt.ts, here on the server, so a student cannot read or
+// change them. The page only sends codes (level, skill, misconception ids);
+// nibras-catalog.ts turns them into names. Other requests (diagnosis,
+// report) are forwarded as they are.
 // =====================================================================
+
+import { buildSystemPrompt, SYSTEM_PROMPT } from "./nibras-system-prompt.ts";
+import { LEVEL_NAMES, MIS_TITLES, SKILL_TITLES } from "./nibras-catalog.ts";
+
+const pick = (map: Record<string, string>, k: unknown): string | undefined =>
+  typeof k === "string" && Object.hasOwn(map, k) ? map[k] : undefined;
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const MODEL_QUICK = Deno.env.get("NIBRAS_MODEL_QUICK") ?? "claude-haiku-4-5-20251001";
@@ -81,7 +93,10 @@ Deno.serve(async (req: Request) => {
   if (!u.ok) return reply(req, 429, { error: "rate_limited", message: "daily limit reached" });
 
   // 3) validate the request
-  let body: { messages?: Turn[]; tier?: string; max_tokens?: number; images?: { media_type: string; data: string }[] };
+  let body: {
+    messages?: Turn[]; tier?: string; max_tokens?: number; images?: { media_type: string; data: string }[];
+    kind?: string; ctx?: { level?: unknown; skill?: unknown; mis?: unknown };
+  };
   try { body = await req.json(); } catch (_) { return reply(req, 400, { error: "bad_request", message: "invalid JSON" }); }
   const raw = Array.isArray(body.messages) ? body.messages : [];
   const turns: { role: "user" | "assistant"; content: string }[] = [];
@@ -111,6 +126,21 @@ Deno.serve(async (req: Request) => {
       { type: "text", text: String(lastUser.content) },
     ];
   }
+  // the tutor's instructions: only for the chat, and only built here
+  let system: { type: "text"; text: string; cache_control?: { type: "ephemeral" } }[] | undefined;
+  if (body.kind === "chat") {
+    const c = body.ctx ?? {};
+    const full = buildSystemPrompt({
+      level: pick(LEVEL_NAMES, c.level),
+      currentSkill: pick(SKILL_TITLES, c.skill),
+      recentMisconceptions: (Array.isArray(c.mis) ? c.mis : [])
+        .map((id) => pick(MIS_TITLES, id)).filter((t): t is string => !!t).slice(0, 5),
+    });
+    // the fixed part is the same for every student, so it can be cached by the API; the student's part follows it
+    system = [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }];
+    const rest = full.slice(SYSTEM_PROMPT.length).trim();
+    if (rest) system.push({ type: "text", text: rest });
+  }
   const model = body.tier === "quick" ? MODEL_QUICK : MODEL_MAIN;
   const max_tokens = Math.max(64, Math.min(1500, Number(body.max_tokens) || 1000));
 
@@ -124,7 +154,7 @@ Deno.serve(async (req: Request) => {
         "anthropic-version": "2023-06-01",
         "content-type": "application/json",
       },
-      body: JSON.stringify({ model, max_tokens, messages }),
+      body: JSON.stringify(system ? { model, max_tokens, system, messages } : { model, max_tokens, messages }),
       signal: AbortSignal.timeout(55_000),
     });
   } catch (e) {

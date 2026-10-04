@@ -450,3 +450,32 @@ body:not(.has-tabs) .tabbar{display:none!important}
 @media (max-width:700px){.game .mpad.sm button{height:38px}.game .mpad.sm{gap:4px;padding:6px}}
 @media (max-width:700px) and (max-height:760px){.mpad.sm button{height:38px}.mpad.sm button small{display:none}}
 .mpad sup{font-size:.6em}
+/* ---------- what the tutor can put in a chat message: display maths, roots, tables, drawings, games ---------- */
+.dmath{text-align:center;font-size:1.2em;margin:8px 0}
+.sqrt{display:inline-flex;align-items:stretch;white-space:nowrap}
+.sqrt>i{font-style:normal;display:inline-block}
+[data-math="ar"] .sqrt>i{transform:scaleX(-1)}
+.sqrt>span{border-top:.09em solid currentColor;padding:0 .18em;margin-top:.12em}
+.oline{border-top:.09em solid currentColor;padding-top:.02em}
+.msg.wide{max-width:100%;width:100%}
+.tblwrap{overflow-x:auto;margin:6px 0}
+.mtbl{border-collapse:collapse;width:100%;font-size:.95em}
+.mtbl th,.mtbl td{border:1px solid var(--line);padding:6px 10px;text-align:center}
+.mtbl th{background:var(--brand-soft);color:var(--brand-text);font-weight:800}
+.chatfig{margin:8px 0;background:var(--bg);border-radius:12px;padding:10px 6px}
+.gamecard{margin-top:8px;border:2px solid color-mix(in srgb,var(--lamp) 55%,transparent);border-radius:16px;padding:12px;background:var(--bg);display:grid;gap:12px}
+.gamecard>*{min-width:0}
+.msg.wide{padding-inline:8px}
+.gamecard .mpad.sm{padding:6px;gap:4px}
+.gamecard .mpad.sm button small{font-size:.54rem}
+.mpad .abc{white-space:nowrap}
+.mpad.sm .abc{font-size:.82rem}
+.gamecard.done{border-style:dashed;border-color:var(--line);gap:4px;opacity:.85}
+.ghead{display:flex;align-items:center;gap:8px;font-weight:800;color:var(--brand-text);font-size:.92rem}
+.ghead svg{width:20px;height:20px;flex:none}
+.gamecard .stem{font-size:1.12rem}
+.gres{display:grid;gap:2px}
+.gres b{font-size:.82rem;opacity:.85}
+.gres .tag{font-weight:800;font-size:.9rem}
+.msg.me .gres .tag.ok{color:var(--glow)}
+.msg.me .gres .tag.no{color:#FFD9C7}
