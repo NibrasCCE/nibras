@@ -53,6 +53,8 @@ a{color:var(--brand-text)}
 .frac>span:first-child{border-bottom:.11em solid currentColor;padding:0 .3em .06em}
 .frac>span:last-child{padding:.04em .3em 0}
 .m sup,.msg sup{font-size:.68em;line-height:0}
+/* the empty answer box of the school books */
+.abox{display:inline-block;width:1.5em;height:1.5em;vertical-align:-.38em;margin:0 .12em;border:.1em solid var(--brand-text);border-radius:.22em;background:var(--surface);box-shadow:inset 0 -.14em 0 color-mix(in srgb,var(--brand-text) 22%,transparent)}
 math{font-size:1.05em}
 .muted{color:var(--ink-2)} .small{font-size:.9rem} .tiny{font-size:.8rem;color:var(--ink-3)}
 .wrap{max-width:760px;margin-inline:auto;padding-inline:16px}

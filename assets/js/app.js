@@ -62,6 +62,8 @@ document.documentElement.setAttribute("data-math",AR_MATH?"ar":"latin");
 if(!AR_MATH){const k=document.createElement("script");k.src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js";document.head.appendChild(k);} /* LaTeX is only drawn in the Latin notation */
 const SUPS={"²":"2","³":"3","⁴":"4","⁵":"5"};
 function decorate(h){               /* h: already-escaped text in Arabic notation */
+  /* the unknown result is the empty box of the school books, not a question mark */
+  h=h.replace(/(=\s*)؟/g,'$1<span class="abox" aria-label="الجواب"></span>').replace(/▢/g,'<span class="abox" aria-label="فراغ"></span>');
   if(!AR_MATH)return h;
   return h.replace(/(^|[^\/٠-٩٫])([٠-٩]+)\/([٠-٩]+)(?![\/٠-٩٫])/g,(_,pre,a,b)=>`${pre}<span class="frac"><span>${a}</span><span>${b}</span></span>`)
     .replace(/\^([٠-٩]+)/g,"<sup>$1</sup>")
