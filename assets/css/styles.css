@@ -53,6 +53,8 @@ a{color:var(--brand-text)}
 .frac>span:first-child{border-bottom:.11em solid currentColor;padding:0 .3em .06em}
 .frac>span:last-child{padding:.04em .3em 0}
 .m sup,.msg sup{font-size:.68em;line-height:0}
+/* in the school books the exponent sits at the upper left of its base: ٣ then a small ٥ to its left */
+[data-math="ar"] sup{unicode-bidi:isolate}
 /* a mixed number, as in the school books: the whole number with its fraction beside it */
 .mix{display:inline-flex;align-items:center;direction:ltr;unicode-bidi:isolate;vertical-align:middle;margin:0 .1em}
 .mix .frac{margin:0 0 0 .1em}
@@ -410,3 +412,6 @@ body:not(.has-tabs) .tabbar{display:none!important}
 .fignav{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .fignav button:disabled{opacity:.4;cursor:default}
 .fb .figs{margin-top:6px;background:var(--surface);border-radius:12px;padding:12px 10px}
+/* order of operations, one step per line (figures.js "steps") */
+.steps{display:grid;gap:8px;justify-items:start;font-size:1.3rem;line-height:2}
+.steps .hl{background:var(--glow-soft);border-bottom:3px solid var(--lamp);border-radius:6px;padding:.05em .3em}

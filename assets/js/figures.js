@@ -25,6 +25,7 @@ const FIG=(function(){
   const CM=(x,y,col,k)=>{k=k||1;return AR?`<path d="M${r1(x+1.2*k)} ${r1(y-1*k)}q${r1(1.6*k)} ${r1(4.6*k)} ${r1(-3.4*k)} ${r1(7.4*k)}" fill="none" stroke="${col}" stroke-width="${r1(2.7*k)}" stroke-linecap="round"/>`:`<circle cx="${r1(x)}" cy="${r1(y+2*k)}" r="${r1(1.9*k)}" fill="${col}"/>`;};
   /* a decimal number as written in data.js ("9.63"): its digits, how many are before the mark, how many after */
   const dec=s=>{const m=String(s||"").match(/^(\d+)(?:\.(\d+))?$/);return m?{digits:(m[1]+(m[2]||"")).split("").map(Number),dp:m[1].length,places:(m[2]||"").length,val:parseFloat(s)}:null;};
+  const fmtNum=v=>String(Math.round(v*1e4)/1e4);
   const frac=s=>{const m=String(s||"").match(/^(\d+)\/(\d+)$/);return m?[+m[1],+m[2]]:null;};
 
   /* --- factor tree: at every branch the prime goes to one side (in a lamp circle), the rest keeps going down --- */
@@ -190,6 +191,55 @@ const FIG=(function(){
       if(b<D.length)g+=CM(xe,yb+7,"var(--lamp)",1.3);
       const res=String(parseFloat((div?A.val/m:A.val*m).toPrecision(12)));
       return{svg:svg(W,H,g,`تحريك الفاصلة العشرية ${N(k)} منازل`,W*1.5),cap:`${p[0]} ${div?"÷":"×"} ${m} = ${res}: الفاصلة تتحرك ${k===1?"منزلة واحدة":k===2?"منزلتين":k+" منازل"} إلى ${div?"اليسار":"اليمين"}.`};}
+    ,
+    /* --- order of operations, one step per line: the operation done next is highlighted (HTML, not SVG) --- */
+    steps(arg){const src=String(arg||"").replace(/-/g,"−").replace(/\*/g,"×").replace(/\//g,"÷"),tk=src.match(/\d+(?:\.\d+)?|[+−×÷()²³⁴⁵]/g);if(!tk)return null;
+      const SUP={"²":2,"³":3,"⁴":4,"⁵":5},isN=t=>/^-?\d/.test(t)||/^−\d/.test(t),val=t=>parseFloat(String(t).replace("−","-")),fmt=v=>{v=Math.round(v*1e4)/1e4;return v<0?"−"+Math.abs(v):String(v);};
+      const show=(a,i,j)=>{let h="";a.forEach((t,k)=>{const sp=k&&!(a[k-1]==="(")&&t!==")"&&!SUP[t]?" ":"";if(k===i)h+=sp+'<span class="hl">'+arMath(t);else h+=sp+arMath(t);if(k===j)h+="</span>";});return h;};
+      const lines=[];let a=tk.slice(),guard=0;
+      while(a.length>1&&guard++<12){
+        let lo=0,hi=a.length-1;const c=a.indexOf(")");if(c>-1){hi=c-1;lo=a.lastIndexOf("(",c)+1;}
+        let i=-1,j=-1,r;
+        for(let k=lo;k<=hi;k++)if(SUP[a[k]]){i=k-1;j=k;r=Math.pow(val(a[k-1]),SUP[a[k]]);break;}
+        if(i<0)for(let k=lo;k<=hi;k++)if(a[k]==="×"||a[k]==="÷"){i=k-1;j=k+1;r=a[k]==="×"?val(a[i])*val(a[j]):val(a[i])/val(a[j]);break;}
+        if(i<0)for(let k=lo+1;k<=hi;k++)if(a[k]==="+"||a[k]==="−"){i=k-1;j=k+1;r=a[k]==="+"?val(a[i])+val(a[j]):val(a[i])-val(a[j]);break;}
+        if(i<0){if(c>-1&&hi===lo){a.splice(lo-1,3,a[lo]);continue;}return null;}
+        if(!isFinite(r))return null;
+        lines.push(show(a,i,j));a.splice(i,j-i+1,fmt(r));
+        if(c>-1&&a[lo-1]==="("&&a[lo+1]===")")a.splice(lo-1,3,a[lo]);
+      }
+      if(a.length!==1||!lines.length)return null;
+      lines.push(arMath(a[0]));
+      return{svg:`<div class="steps" role="img" aria-label="خطوات الحل بالترتيب">${lines.map((l,k)=>`<div class="m">${k?"= ":""}${l}</div>`).join("")}</div>`,cap:"العملية الملوّنة هي التي أجريها أولاً في كل سطر."};},
+    /* --- a power as repeated multiplication: every row has «base» times as many dots as the row above --- */
+    grow(arg){const p=String(arg||"").split(","),b=+p[0],e=+p[1],hide=p[2]==="?";if(!(b>1)||!(e>0)||Math.pow(b,e)>32)return null;
+      const n=Math.pow(b,e),lab=74,pad=12,tw=Math.max(n*15,150),W=tw+pad*2+lab,dy=40,y0=16,H=y0+e*dy+16,x0=AR?pad:pad+lab,s=AR?-1:1,lx=AR?W-pad-8:pad+8;let g="";
+      const X=(k,j)=>x0+(j+.5)*tw/Math.pow(b,k);
+      for(let k=0;k<e;k++)for(let j=0;j<Math.pow(b,k);j++)for(let c=0;c<b;c++)g+=`<line x1="${r1(X(k,j))}" y1="${y0+k*dy+5}" x2="${r1(X(k+1,j*b+c))}" y2="${y0+(k+1)*dy-5}" stroke="var(--brand-text)" stroke-width="1.5" opacity=".55"/>`;
+      for(let k=0;k<=e;k++){for(let j=0;j<Math.pow(b,k);j++)g+=`<circle cx="${r1(X(k,j))}" cy="${y0+k*dy}" r="${k===e?4.6:5.2}" fill="${k===e?"var(--lamp)":"var(--brand-text)"}"/>`;
+        if(k){const y=y0+k*dy;g+=T(lx,y+1,N(b),{size:15})+T(lx+s*9,y-7,N(k),{size:10,fill:"var(--brand-text)"})+T(lx+s*25,y+1,"=",{size:14,fill:"var(--ink-2)"})+T(lx+s*46,y+1,hide&&k===e?"؟":N(Math.pow(b,k)),{size:15,fill:k===e?"var(--brand-text)":"var(--ink)"});}}
+      return{svg:svg(W,H,g,`${N(b)} أس ${N(e)}: في كل صف يتضاعف العدد ${N(b)} مرات`),cap:hide?`في كل صف يُضرب العدد في ${b}. كم دائرة في الصف الأخير؟`:`${b}${"⁰¹²³⁴⁵"[e]||""} = ${Array(e).fill(b).join(" × ")} = ${n}`};},
+    /* --- a ratio as two bars cut into equal parts --- */
+    ratio(arg){const p=String(arg||"").split(","),a=+p[0],b=+p[1],hide=p[2]==="?";if(!(a>0)||!(b>0))return null;const gg=gcd(a,b),ua=a/gg,ub=b/gg,m=Math.max(ua,ub);if(m>12)return null;
+      const u=Math.min(42,230/m),bh=30,gap=12,lab=44,pad=8,W=pad*2+lab+m*u,H=pad*2+bh*2+gap;let g="";
+      [[a,ua,"var(--brand-text)","var(--on-brand)"],[b,ub,"var(--lamp)","var(--on-lamp)"]].forEach(([tot,n,col,ink],r)=>{const y=pad+r*(bh+gap);
+        g+=T(AR?W-pad-lab/2+4:pad+lab/2-4,y+bh/2,N(tot),{size:16});
+        for(let k=0;k<n;k++){const x=AR?W-pad-lab-(k+1)*u:pad+lab+k*u;g+=`<rect x="${r1(x+1.5)}" y="${y}" width="${r1(u-3)}" height="${bh}" rx="6" fill="${col}"/>`+(u>=20?T(x+u/2,y+bh/2+1,N(gg),{size:12.5,fill:ink}):"");}});
+      return{svg:svg(W,H,g,`نسبة ${N(a)} إلى ${N(b)} بمستطيلات متساوية`),cap:hide?`كل مستطيل يمثّل ${gg}. كم مستطيلاً في كل صف؟`:`${a} : ${b} = ${ua} : ${ub}`};},
+    /* --- a percentage on the hundred grid --- */
+    hundred(arg){const ps=nums(arg);if(!ps.length||ps[0]+(ps[1]||0)>100)return null;const c=15,pad=6,W=c*10+pad*2;let g="";
+      for(let i=0;i<100;i++){const row=Math.floor(i/10),col=i%10,x=AR?W-pad-(col+1)*c:pad+col*c,on=i<ps[0]?"var(--lamp)":i<ps[0]+(ps[1]||0)?"var(--brand-text)":"var(--surface)";
+        g+=`<rect x="${x}" y="${pad+row*c}" width="${c}" height="${c}" fill="${on}"${i>=ps[0]&&i<ps[0]+(ps[1]||0)?' opacity=".35"':""} stroke="var(--brand-text)" stroke-width="1"/>`;}
+      g+=`<rect x="${pad}" y="${pad}" width="${c*10}" height="${c*10}" fill="none" stroke="var(--brand-text)" stroke-width="2.2" rx="2"/>`;
+      return{svg:svg(W,W,g,`${N(ps[0])} مربعاً ملوّناً من ${N(100)}`,W*1.3),cap:`${ps[0]}% = ${ps[0]}/100: أي ${ps[0]} مربعاً من كل 100.`};},
+    /* --- a percentage of a quantity: the whole bar is 100% --- */
+    pbar(arg){const p=String(arg||"").split(","),pc=+p[0],tot=+p[1],hide=p[2]==="?";if(!(pc>0)||pc>100||!(tot>0))return null;
+      const bw=270,bh=30,pad=20,W=bw+pad*2,H=96,y=30,parts=100%pc===0&&100/pc<=10?100/pc:0,v=fmtNum(tot*pc/100);let g="";
+      g+=`<rect x="${pad}" y="${y}" width="${bw}" height="${bh}" rx="6" fill="var(--surface)" stroke="var(--brand-text)" stroke-width="2"/><rect x="${pad}" y="${y}" width="${r1(bw*pc/100)}" height="${bh}" rx="6" fill="var(--lamp)" stroke="var(--brand-text)" stroke-width="2"/>`;
+      for(let k=1;k<parts;k++)g+=`<line x1="${r1(pad+k*bw/parts)}" y1="${y}" x2="${r1(pad+k*bw/parts)}" y2="${y+bh}" stroke="var(--brand-text)" stroke-width="1.5"/>`;
+      g+=T(pad,y-13,N(0),{size:13,fill:"var(--ink-2)"})+T(pad+bw,y-13,N(tot),{size:14})+T(pad+bw*pc/100,y-13,hide?"؟":N(v),{size:15,fill:"var(--brand-text)"});
+      g+=T(pad,y+bh+16,N(0)+"٪",{size:12,fill:"var(--ink-2)",rtl:true})+T(pad+bw*pc/100,y+bh+16,N(pc)+"٪",{size:13,rtl:true})+T(pad+bw,y+bh+16,N(100)+"٪",{size:12,fill:"var(--ink-2)",rtl:true});
+      return{svg:svg(W,H,g,`${N(pc)}٪ من ${N(tot)}`),cap:hide?`الشريط كله ${tot}، وهو 100%. كم يساوي الجزء الذهبي؟`:`${pc}% من ${tot} = ${pc}/100 × ${tot} = ${v}`};}
   };
   function make(spec){
     const m=String(spec||"").match(/^([a-z]+)(?::(.*))?$/);if(!m||!KINDS[m[1]])return null;

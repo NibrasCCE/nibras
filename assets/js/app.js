@@ -61,6 +61,18 @@ const RUN=/[A-Za-z0-9▢(−\-|][A-Za-z0-9²³⁴⁵ ×÷=+\-−().\/▢|%]*(?:=
 document.documentElement.setAttribute("data-math",AR_MATH?"ar":"latin");
 if(!AR_MATH){const k=document.createElement("script");k.src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js";document.head.appendChild(k);} /* LaTeX is only drawn in the Latin notation */
 const SUPS={"²":"2","³":"3","⁴":"4","⁵":"5"};
+/* a ratio is read from the right in the school books: in «٢ : ٣» the first term is on the right.
+   Left alone, the browser would join the two numbers and the colon into one left-to-right group,
+   so an invisible right-to-left mark goes on each side of the colon. Clock times are left as they are. */
+function ratioRTL(t){
+  if(!AR_MATH)return t;
+  /* only «٢:٣» or «٢ : ٣»; a colon that ends a phrase («من 100: 20 …») is not a ratio */
+  return t.replace(/([٠-٩])( ?):\2(?=[٠-٩])/g,(m,d,sp,off,str)=>{
+    const nxt=(str.slice(off+m.length).match(/^[٠-٩]+/)||[""])[0];
+    if(/^٠[٠-٩]$/.test(nxt)||/الساعة/.test(str.slice(Math.max(0,off-14),off)))return m;
+    return d+" \u200F:\u200F ";
+  });
+}
 function decorate(h){               /* h: already-escaped text in Arabic notation */
   /* the unknown result is the empty box of the school books, not a question mark */
   h=h.replace(/(=\s*)؟/g,'$1<span class="abox" aria-label="الجواب"></span>').replace(/▢/g,'<span class="abox" aria-label="فراغ"></span>');
@@ -83,7 +95,7 @@ function mathify(raw){
     out+=IS_MATH.test(t)?mx(t):plainHTML(t);
     last=m.index+t.length;
   }
-  return out+plainHTML(raw.slice(last));
+  return ratioRTL(out+plainHTML(raw.slice(last)));
 }
 /* teaching figures (figures.js): spec like "tree:72"; cap overrides the figure's own caption */
 function figHTML(spec,cap){
@@ -101,7 +113,7 @@ function arProse(raw){
     out+=IS_MATH.test(t)?arMath(t).replace(/[²³⁴⁵]/g,c=>"^"+arDigits(SUPS[c])):arNum(t);
     last=m.index+t.length;
   }
-  return out+arNum(raw.slice(last));
+  return ratioRTL(out+arNum(raw.slice(last)));
 }
 /* the AI is told to write plain text, but if it still sends $LaTeX$ we unfold it */
 function texToPlain(t){
