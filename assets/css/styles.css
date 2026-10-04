@@ -53,6 +53,9 @@ a{color:var(--brand-text)}
 .frac>span:first-child{border-bottom:.11em solid currentColor;padding:0 .3em .06em}
 .frac>span:last-child{padding:.04em .3em 0}
 .m sup,.msg sup{font-size:.68em;line-height:0}
+/* a mixed number, as in the school books: the whole number with its fraction beside it */
+.mix{display:inline-flex;align-items:center;direction:ltr;unicode-bidi:isolate;vertical-align:middle;margin:0 .1em}
+.mix .frac{margin:0 0 0 .1em}
 /* the empty answer box of the school books */
 .abox{display:inline-block;width:1.5em;height:1.5em;vertical-align:-.38em;margin:0 .12em;border:.1em solid var(--brand-text);border-radius:.22em;background:var(--surface);box-shadow:inset 0 -.14em 0 color-mix(in srgb,var(--brand-text) 22%,transparent)}
 math{font-size:1.05em}
@@ -386,3 +389,24 @@ body:not(.has-tabs) .tabbar{display:none!important}
 
 .interlude .big{width:90px;height:110px;filter:drop-shadow(0 0 16px color-mix(in srgb,var(--glow) 80%,transparent))}
 .hero .avatar-lg svg{box-shadow:0 0 0 6px var(--glow-soft)}
+/* ---------- teaching figures (figures.js) + the «أتعلّم» box of the lesson ---------- */
+.figs{display:grid;gap:16px;justify-items:center}
+.fig{margin:0;display:grid;gap:6px;justify-items:center;width:100%}
+.figsvg{display:block;width:100%;height:auto;direction:ltr}
+.figrow{display:flex;flex-wrap:wrap;gap:8px 18px;justify-content:center;align-items:flex-end;width:100%}
+.figrow .figsvg{width:auto;flex:0 1 auto;height:auto;min-width:0}
+.fig figcaption{font-size:.92rem;color:var(--ink-2);text-align:center;line-height:1.9}
+.learn{border:2px solid color-mix(in srgb,var(--brand-text) 35%,transparent);background:var(--brand-soft);border-radius:var(--r-sm);padding:12px 16px;display:grid;gap:6px}
+.learn>b{display:flex;align-items:center;gap:6px;color:var(--brand-text)}
+.learn>b svg{color:var(--lamp);flex:none;width:20px;height:20px}
+.learn ul{margin:0;padding:0;list-style:none;display:grid;gap:6px}
+.learn li{position:relative;padding-inline-start:18px;line-height:1.9}
+.learn li::before{content:"";position:absolute;inset-inline-start:2px;top:.78em;width:8px;height:8px;border-radius:50%;background:var(--lamp)}
+.figbox{border:1px dashed var(--line);border-radius:var(--r-sm);padding:12px 14px;background:var(--surface);display:grid;gap:10px}
+.figbox>b{color:var(--brand-text)}
+.figs.swipe{position:relative;display:flex;gap:0;justify-items:initial;align-items:center;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain}
+.figs.swipe::-webkit-scrollbar{display:none}
+.figs.swipe>.fig{flex:0 0 100%;scroll-snap-align:center;padding:2px 4px}
+.fignav{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.fignav button:disabled{opacity:.4;cursor:default}
+.fb .figs{margin-top:6px;background:var(--surface);border-radius:12px;padding:12px 10px}

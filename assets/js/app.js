@@ -65,7 +65,10 @@ function decorate(h){               /* h: already-escaped text in Arabic notatio
   /* the unknown result is the empty box of the school books, not a question mark */
   h=h.replace(/(=\s*)؟/g,'$1<span class="abox" aria-label="الجواب"></span>').replace(/▢/g,'<span class="abox" aria-label="فراغ"></span>');
   if(!AR_MATH)return h;
-  return h.replace(/(^|[^\/٠-٩٫])([٠-٩]+)\/([٠-٩]+)(?![\/٠-٩٫])/g,(_,pre,a,b)=>`${pre}<span class="frac"><span>${a}</span><span>${b}</span></span>`)
+  const fr=(a,b)=>`<span class="frac"><span>${a}</span><span>${b}</span></span>`;
+  /* a mixed number is drawn as in the school books: the whole number, then its fraction beside it */
+  return h.replace(/(^|[^\/٠-٩٫])([٠-٩]+) ([٠-٩]+)\/([٠-٩]+)(?![\/٠-٩٫])/g,(_,pre,w,a,b)=>`${pre}<span class="mix"><span>${w}</span>${fr(a,b)}</span>`)
+    .replace(/(^|[^\/٠-٩٫])([٠-٩]+)\/([٠-٩]+)(?![\/٠-٩٫])/g,(_,pre,a,b)=>pre+fr(a,b))
     .replace(/\^([٠-٩]+)/g,"<sup>$1</sup>")
     .replace(/[²³⁴⁵]/g,c=>`<sup>${arDigits(SUPS[c])}</sup>`);
 }
@@ -82,6 +85,13 @@ function mathify(raw){
   }
   return out+plainHTML(raw.slice(last));
 }
+/* teaching figures (figures.js): spec like "tree:72"; cap overrides the figure's own caption */
+function figHTML(spec,cap){
+  const f=typeof FIG!=="undefined"?FIG.make(spec):null;if(!f)return"";
+  const c=cap!=null?cap:f.cap;
+  return `<figure class="fig">${f.svg}${c?`<figcaption>${mathify(c)}</figcaption>`:""}</figure>`;
+}
+const figsHTML=(list,cap)=>{const h=(list||[]).map((x,i,a)=>typeof x==="string"?figHTML(x,i===a.length-1?cap:undefined):figHTML(x.f,x.cap)).join("");return h?`<div class="figs">${h}</div>`:"";};
 /* the same conversion as plain text: for the AI prompts, the chat box and the parents' e-mails */
 function arProse(raw){
   raw=String(raw);if(!AR_MATH)return raw;
@@ -824,13 +834,17 @@ function vSkill(sid){
   let fb="";
   if(P.state==="right")fb=`<div class="fb good" role="status"><b>صح! ${P.first?"شغلك مرتّب.":"حلو إنك ما استسلمت."}</b>${P.first?"":`<p class="small">الجواب الأول ما بيعدّ بالسلسلة، بس المحاولة هي اللي بتعلّم.</p>`}</div>`;
   if(P.state==="hint"){const r=P.fb||{};const txt=r.mis&&HINT[r.mis]?HINT[r.mis]:r.src==="form"?r.why:sk.summary;
-    fb=`<div class="fb hint" role="status"><b>${r.mis?"فكرة شائعة، خلينا نشوفها":"قرّبت! جرّب مرة ثانية"}</b><p>${mathify(txt)}</p></div>`;}
+    const hf=Array.isArray(q.hfig)?q.hfig:q.hfig?(q.hfig[r.mis]||q.hfig._):null;
+    fb=`<div class="fb hint" role="status"><b>${r.mis?"فكرة شائعة، خلينا نشوفها":"قرّبت! جرّب مرة ثانية"}</b><p>${mathify(txt)}</p>${r.src==="form"?"":figsHTML(hf,q.hcap)}</div>`;}
   app.innerHTML=`<section class="view">
     <div class="row between"><a class="btn btn-line btn-sm" href="#path">← مساري</a><span class="chip ${lit?"lit":"calm"}">${lit?"فانوس مضاء ✦":`سلسلة ${streak} من ${MASTER_STREAK}`}</span></div>
     <div class="card explain">
       <p class="eyebrow">${LV[sk.lv].name}</p>
       <h2>${esc(sk.title)}</h2>
       <p>${mathify(sk.explanation)}</p>
+      ${sk.learn?`<div class="learn"><b>${BULB}أتعلّم</b><ul>${sk.learn.map(t=>`<li>${mathify(t)}</li>`).join("")}</ul></div>`:""}
+      ${sk.figs?`<div class="figbox"><b>أتأمّل الرسومات</b><div class="figs swipe" id="lfigs" tabindex="0" aria-label="رسومات الدرس">${sk.figs.map(x=>figHTML(x.f,x.cap)).join("")}</div>
+        <div class="fignav"><button type="button" class="btn btn-line btn-sm" id="fprev">→ السابق</button><span id="fpos" class="small" aria-live="polite"></span><button type="button" class="btn btn-line btn-sm" id="fnext">التالي ←</button></div></div>`:""}
       <div class="example"><b>مثال من الحياة</b><p>${mathify(sk.example)}</p></div>
       <p class="tiny">${esc(sk.src)}</p>
     </div>
@@ -840,6 +854,7 @@ function vSkill(sid){
       <div class="row between"><span class="ptype"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${TYPE_IC[q.type]}</svg>${TYPE_NAME[q.type]} · تمرين ${P.i+1} من ${P.qs.length}</span>
         <span class="meter" aria-label="السلسلة">${Array.from({length:MASTER_STREAK},(_,k)=>`<i class="${k<streak||lit?"on":""}"></i>`).join("")}</span></div>
       ${q.scale?scaleSVG(q.stem,P.tilt):""}
+      ${q.fig?figsHTML(q.fig,q.fcap):""}
       <p class="stem">${mathify(q.stem)}</p>
       <div id="w"></div>
       ${fb}
@@ -849,6 +864,15 @@ function vSkill(sid){
       </div>
     </div>`}
   </section>`;
+  /* the lesson's figures: one at a time, swipe or use the two buttons; the place is kept between checks */
+  const lf=$("#lfigs");
+  if(lf){const it=[...lf.children],n=it.length,st=P;
+    const paint=()=>{$("#fpos").textContent=arNum(`${st.fig+1} / ${n}`);$("#fprev").disabled=st.fig<=0;$("#fnext").disabled=st.fig>=n-1;};
+    const go=(i,smooth)=>{st.fig=Math.max(0,Math.min(n-1,i));lf.scrollTo({left:it[st.fig].offsetLeft,behavior:smooth?"smooth":"auto"});paint();};
+    st.fig=Math.min(st.fig||0,n-1);go(st.fig,false);
+    $("#fprev").onclick=()=>go(st.fig-1,true);$("#fnext").onclick=()=>go(st.fig+1,true);
+    lf.addEventListener("scroll",()=>{const i=Math.round(Math.abs(lf.scrollLeft)/Math.max(1,lf.clientWidth));if(i!==st.fig&&i>=0&&i<n){st.fig=i;paint();}},{passive:true});
+  }
   if(finished){const a=$("#again");if(a)a.onclick=()=>{P=null;vSkill(sid);};return;}
   const locked=P.state==="right";
   const w=mountWidget(q,$("#w"),{mode:"practice",init:P.val,tried:P.tried,locked,reveal:locked,order:P.order,items:P.items,
@@ -1039,7 +1063,7 @@ function context(){
   L.push("","# مكتبة الأخطاء المفاهيمية");
   MIS.forEach(m=>L.push(`- ${m.id}: ${m.title}. ${arProse(m.description)} مثال: ${arProse(m.example)} علاج مقترح: ${arProse(HINT[m.id])}`));
   L.push("","# مهارات المسار (مسودة، مرتبة من الصف الخامس للسابع)");
-  SKILLS.forEach(s=>L.push(`- ${s.title} (${LV[s.lv].name}): ${arProse(s.explanation)} مثال: ${arProse(s.example)}`));
+  SKILLS.forEach(s=>L.push(`- ${s.title} (${LV[s.lv].name}): ${arProse(s.explanation)} مثال: ${arProse(s.example)}${s.learn?" قواعد الكتاب المدرسي لهذه المهارة (التزم بطريقتها ومصطلحاتها عند الشرح): "+s.learn.map(arProse).join(" "):""}`));
   return L.join("\n");
 }
 const vis=t=>String(t).replace(/<<[^>]*>>/g,"").replace(/<<[^>]*$/,"").replace(/<$/,"").trim();
