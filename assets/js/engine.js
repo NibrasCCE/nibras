@@ -30,7 +30,9 @@ function norm(s){
     /* a mixed number, whichever part was typed first: «2 1/2» or «1/2 2» → (2+1/2) */
     .replace(/(^|[^\/\d.])(\d+)\s+(\d+)\/(\d+)(?![\/\d.])/g,"$1($2+$3/$4)").replace(/(^|[^\/\d.(+])(\d+)\/(\d+)\s+(\d+)(?![\/\d.])/g,"$1($4+$2/$3)")
     .replace(/[−–—]/g,"-").replace(/×/g,"*").replace(/÷/g,"/")
-    .replace(/²/g,"^2").replace(/³/g,"^3").replace(/⁴/g,"^4").replace(/\s+/g,"").toLowerCase();
+    .replace(/²/g,"^2").replace(/³/g,"^3").replace(/⁴/g,"^4").replace(/\s+/g,"").toLowerCase()
+    /* a negative number typed with its sign after the digits («٣−») */
+    .replace(/(^|=)(\d+(?:\.\d+)?)-$/,"$1-$2");
 }
 function tokenize(s){
   const out=[];let i=0;

@@ -25,6 +25,9 @@ const FIG=(function(){
   const CM=(x,y,col,k)=>{k=k||1;return AR?`<path d="M${r1(x+1.2*k)} ${r1(y-1*k)}q${r1(1.6*k)} ${r1(4.6*k)} ${r1(-3.4*k)} ${r1(7.4*k)}" fill="none" stroke="${col}" stroke-width="${r1(2.7*k)}" stroke-linecap="round"/>`:`<circle cx="${r1(x)}" cy="${r1(y+2*k)}" r="${r1(1.9*k)}" fill="${col}"/>`;};
   /* a decimal number as written in data.js ("9.63"): its digits, how many are before the mark, how many after */
   const dec=s=>{const m=String(s||"").match(/^(\d+)(?:\.(\d+))?$/);return m?{digits:(m[1]+(m[2]||"")).split("").map(Number),dp:m[1].length,places:(m[2]||"").length,val:parseFloat(s)}:null;};
+  /* a maths fragment as HTML in the school notation; a raised digit becomes a real superscript (drawn at the upper left by the page CSS) */
+  const SUPD={"²":"2","³":"3","⁴":"4","⁵":"5"};
+  const M=t=>{const h=arMath(String(t)).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));return AR?h.replace(/[²³⁴⁵]/g,c=>`<sup>${N(SUPD[c])}</sup>`):h;};
   const fmtNum=v=>String(Math.round(v*1e4)/1e4);
   const frac=s=>{const m=String(s||"").match(/^(\d+)\/(\d+)$/);return m?[+m[1],+m[2]]:null;};
 
@@ -57,6 +60,35 @@ const FIG=(function(){
   }
   const sideBySide=(parts,gap)=>{let x=0,H=0,g="";parts.forEach(p=>{H=Math.max(H,p.H);});parts.forEach(p=>{g+=`<g transform="translate(${r1(x)} 0)">${p.g}</g>`;x+=p.W+gap;});return{g,W:x-gap,H};};
 
+  /* order of operations, one line per step; the operation done next is wrapped in .hl. Returns the lines (HTML) or null */
+  function runSteps(arg){
+    const src=String(arg||"").replace(/-/g,"−").replace(/\*/g,"×").replace(/\//g,"÷"),raw=src.match(/\(−\d+(?:\.\d+)?\)|\d+(?:\.\d+)?|[+−×÷()²³⁴⁵]/g);if(!raw)return null;
+    const SUP={"²":2,"³":3,"⁴":4,"⁵":5},isNum=t=>/\d/.test(t),tk=[];
+    raw.forEach((t,k)=>{const pv=tk[tk.length-1];if(t==="−"&&(pv===undefined||"+−×÷(".includes(pv))&&raw[k+1]&&/^\d/.test(raw[k+1]))tk.push("−");else if(tk[tk.length-1]==="−"&&isNum(t)&&/^\d/.test(t)&&(tk.length===1||"+−×÷(".includes(tk[tk.length-2])))tk[tk.length-1]="−"+t;else tk.push(t);});
+    const val=t=>parseFloat(String(t).replace(/[()]/g,"").replace("−","-")),fmt=v=>{v=Math.round(v*1e4)/1e4;return v<0?"−"+Math.abs(v):String(v);};
+    const show=(a,i,j)=>{let h="";a.forEach((t,k)=>{const sp=k&&!(a[k-1]==="(")&&t!==")"&&!SUP[t]?" ":"";if(k===i)h+=sp+'<span class="hl">'+M(t);else h+=sp+M(t);if(k===j)h+="</span>";});return h;};
+    const lines=[];let a=tk.slice(),guard=0;
+    while(a.length>1&&guard++<14){
+      let lo=0,hi=a.length-1;const c=a.indexOf(")");if(c>-1){hi=c-1;lo=a.lastIndexOf("(",c)+1;}
+      let i=-1,j=-1,r;
+      for(let k=lo;k<=hi;k++)if(SUP[a[k]]){i=k-1;j=k;r=Math.pow(val(a[k-1]),SUP[a[k]]);break;}
+      if(i<0)for(let k=lo;k<=hi;k++)if(a[k]==="×"||a[k]==="÷"){i=k-1;j=k+1;r=a[k]==="×"?val(a[i])*val(a[j]):val(a[i])/val(a[j]);break;}
+      if(i<0)for(let k=lo+1;k<=hi;k++)if(a[k]==="+"||a[k]==="−"){i=k-1;j=k+1;r=a[k]==="+"?val(a[i])+val(a[j]):val(a[i])-val(a[j]);break;}
+      if(i<0){if(c>-1&&hi===lo){a.splice(lo-1,3,a[lo]);continue;}return null;}
+      if(!isFinite(r))return null;
+      lines.push(show(a,i,j));a.splice(i,j-i+1,fmt(r));
+      if(c>-1&&a[lo-1]==="("&&a[lo+1]===")")a.splice(lo-1,3,a[lo]);
+    }
+    if(a.length!==1||!lines.length)return null;
+    lines.push(M(a[0]));return lines;
+  }
+  /* a number line from lo to hi, growing to the right as in the school books (negative numbers on the left) */
+  const NEG=k=>k<0?"−"+N(-k):N(k);
+  function NL(lo,hi,y,o){o=o||{};const n=hi-lo,u=Math.max(13,Math.min(26,300/n)),pad=24,W=n*u+pad*2,X=k=>pad+(k-lo)*u;let g="";
+    g+=`<line x1="${pad-14}" y1="${y}" x2="${W-pad+14}" y2="${y}" stroke="var(--ink-3)" stroke-width="2.4" stroke-linecap="round"/><path d="M${W-pad+8} ${y-5}l7 5-7 5M${pad-8} ${y-5}l-7 5 7 5" fill="none" stroke="var(--ink-3)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`;
+    for(let k=lo;k<=hi;k++){g+=`<line x1="${r1(X(k))}" y1="${y-(k===0?8:5)}" x2="${r1(X(k))}" y2="${y+(k===0?8:5)}" stroke="var(--ink-3)" stroke-width="${k===0?2.6:1.6}"/>`;
+      if(!o.only||o.only.includes(k))g+=T(X(k),y+20,NEG(k),{size:u<16?10.5:12.5,rtl:AR,w:k===0?900:800,fill:(o.mark||[]).includes(k)?"var(--brand-text)":"var(--ink)"});}
+    return{g,W,X,u};}
   const KINDS={
     tree(arg){const ns=nums(arg);if(!ns.length)return null;const b=sideBySide((AR?ns.slice().reverse():ns).map(treeG),18);
       return{svg:svg(b.W,b.H,b.g,"شجرة العوامل الأولية للعدد "+ns.map(N).join(" و ")),cap:ns.map(n=>`${n} = ${primes(n).join(" × ")}`).join("  ،  ")};},
@@ -193,24 +225,8 @@ const FIG=(function(){
       return{svg:svg(W,H,g,`تحريك الفاصلة العشرية ${N(k)} منازل`,W*1.5),cap:`${p[0]} ${div?"÷":"×"} ${m} = ${res}: الفاصلة تتحرك ${k===1?"منزلة واحدة":k===2?"منزلتين":k+" منازل"} إلى ${div?"اليسار":"اليمين"}.`};}
     ,
     /* --- order of operations, one step per line: the operation done next is highlighted (HTML, not SVG) --- */
-    steps(arg){const src=String(arg||"").replace(/-/g,"−").replace(/\*/g,"×").replace(/\//g,"÷"),tk=src.match(/\d+(?:\.\d+)?|[+−×÷()²³⁴⁵]/g);if(!tk)return null;
-      const SUP={"²":2,"³":3,"⁴":4,"⁵":5},isN=t=>/^-?\d/.test(t)||/^−\d/.test(t),val=t=>parseFloat(String(t).replace("−","-")),fmt=v=>{v=Math.round(v*1e4)/1e4;return v<0?"−"+Math.abs(v):String(v);};
-      const show=(a,i,j)=>{let h="";a.forEach((t,k)=>{const sp=k&&!(a[k-1]==="(")&&t!==")"&&!SUP[t]?" ":"";if(k===i)h+=sp+'<span class="hl">'+arMath(t);else h+=sp+arMath(t);if(k===j)h+="</span>";});return h;};
-      const lines=[];let a=tk.slice(),guard=0;
-      while(a.length>1&&guard++<12){
-        let lo=0,hi=a.length-1;const c=a.indexOf(")");if(c>-1){hi=c-1;lo=a.lastIndexOf("(",c)+1;}
-        let i=-1,j=-1,r;
-        for(let k=lo;k<=hi;k++)if(SUP[a[k]]){i=k-1;j=k;r=Math.pow(val(a[k-1]),SUP[a[k]]);break;}
-        if(i<0)for(let k=lo;k<=hi;k++)if(a[k]==="×"||a[k]==="÷"){i=k-1;j=k+1;r=a[k]==="×"?val(a[i])*val(a[j]):val(a[i])/val(a[j]);break;}
-        if(i<0)for(let k=lo+1;k<=hi;k++)if(a[k]==="+"||a[k]==="−"){i=k-1;j=k+1;r=a[k]==="+"?val(a[i])+val(a[j]):val(a[i])-val(a[j]);break;}
-        if(i<0){if(c>-1&&hi===lo){a.splice(lo-1,3,a[lo]);continue;}return null;}
-        if(!isFinite(r))return null;
-        lines.push(show(a,i,j));a.splice(i,j-i+1,fmt(r));
-        if(c>-1&&a[lo-1]==="("&&a[lo+1]===")")a.splice(lo-1,3,a[lo]);
-      }
-      if(a.length!==1||!lines.length)return null;
-      lines.push(arMath(a[0]));
-      return{svg:`<div class="steps" role="img" aria-label="خطوات الحل بالترتيب">${lines.map((l,k)=>`<div class="m">${k?"= ":""}${l}</div>`).join("")}</div>`,cap:"العملية الملوّنة هي التي أجريها أولاً في كل سطر."};},
+    steps(arg){const lines=runSteps(arg);if(!lines)return null;
+      return{svg:`<div class="steps" role="img" aria-label="خطوات الحل بالترتيب">${lines.map((l,k)=>`<div><span class="m">${k?"= ":""}${l}</span></div>`).join("")}</div>`,cap:"العملية الملوّنة هي التي أجريها أولاً في كل سطر."};},
     /* --- a power as repeated multiplication: every row has «base» times as many dots as the row above --- */
     grow(arg){const p=String(arg||"").split(","),b=+p[0],e=+p[1],hide=p[2]==="?";if(!(b>1)||!(e>0)||Math.pow(b,e)>32)return null;
       const n=Math.pow(b,e),lab=74,pad=12,tw=Math.max(n*15,150),W=tw+pad*2+lab,dy=40,y0=16,H=y0+e*dy+16,x0=AR?pad:pad+lab,s=AR?-1:1,lx=AR?W-pad-8:pad+8;let g="";
@@ -240,6 +256,52 @@ const FIG=(function(){
       g+=T(pad,y-13,N(0),{size:13,fill:"var(--ink-2)"})+T(pad+bw,y-13,N(tot),{size:14})+T(pad+bw*pc/100,y-13,hide?"؟":N(v),{size:15,fill:"var(--brand-text)"});
       g+=T(pad,y+bh+16,N(0)+"٪",{size:12,fill:"var(--ink-2)",rtl:true})+T(pad+bw*pc/100,y+bh+16,N(pc)+"٪",{size:13,rtl:true})+T(pad+bw,y+bh+16,N(100)+"٪",{size:12,fill:"var(--ink-2)",rtl:true});
       return{svg:svg(W,H,g,`${N(pc)}٪ من ${N(tot)}`),cap:hide?`الشريط كله ${tot}، وهو 100%. كم يساوي الجزء الذهبي؟`:`${pc}% من ${tot} = ${pc}/100 × ${tot} = ${v}`};}
+    ,
+    /* --- the integers on the number line --- */
+    nline(arg){const p=String(arg||"").split(",").map(x=>parseInt(x,10)),lo=isFinite(p[0])?p[0]:-7,hi=isFinite(p[1])?p[1]:7;if(hi-lo<2||hi-lo>24)return null;const L=NL(lo,hi,34);
+      const g=L.g+T((L.X(lo)+L.X(0))/2,12,"الأعداد السالبة",{size:11.5,fill:"var(--brand-text)",rtl:true})+T((L.X(0)+L.X(hi))/2,12,"الأعداد الموجبة",{size:11.5,fill:"var(--ink-2)",rtl:true});
+      return{svg:svg(L.W,66,g,`خط الأعداد من ${NEG(lo)} إلى ${NEG(hi)}`),cap:"تزداد قيمة الأعداد كلما انتقلنا إلى اليمين، وتقل كلما انتقلنا إلى اليسار."};},
+    /* --- absolute value: the distance from zero, the same on both sides --- */
+    abs(arg){const n=Math.abs(parseInt(arg,10));if(!(n>0)||n>10)return null;const L=NL(-n-1,n+1,58,{only:[-n,0,n],mark:[-n,n]}),y=58;let g=L.g;
+      [[-n,"var(--brand-text)"],[n,"var(--lamp)"]].forEach(([k,col])=>{const x1=L.X(0),x2=L.X(k);g+=`<path d="M${r1(x1)} ${y-12}Q${r1((x1+x2)/2)} ${y-46} ${r1(x2)} ${y-12}" fill="none" stroke="${col}" stroke-width="2.6" stroke-linecap="round"/><circle cx="${r1(x2)}" cy="${y}" r="5" fill="${col}"/>`+T((x1+x2)/2,y-40,`${N(n)} وحدات`,{size:11.5,rtl:true,fill:"var(--ink-2)"});});
+      return{svg:svg(L.W,92,g,`العددان ${NEG(-n)} و ${N(n)} يبعدان ${N(n)} وحدات عن الصفر`),cap:`|−${n}| = ${n} و |${n}| = ${n}: المسافة عن الصفر هي نفسها.`};},
+    /* --- adding or subtracting on the number line: start, then move right or left --- */
+    move(arg){const p=String(arg||"").split(","),a=parseInt(p[0],10),d=parseInt(p[1],10),hide=p[2]==="?";if(!isFinite(a)||!d)return null;const e=a+d,lo=Math.min(a,e,0)-1,hi=Math.max(a,e,0)+1;if(hi-lo>24)return null;
+      const y=56,L=NL(lo,hi,y,{only:hide?[a,0]:[a,0,e],mark:[e]}),x1=L.X(a),x2=L.X(e),s=d>0?1:-1;let g=L.g;
+      g+=`<path d="M${r1(x1)} ${y-12}Q${r1((x1+x2)/2)} ${y-50} ${r1(x2-s*3)} ${y-13}" fill="none" stroke="var(--brand-text)" stroke-width="2.6" stroke-linecap="round"/><path d="M${r1(x2-s*11)} ${y-17}L${r1(x2-s*2)} ${y-12}L${r1(x2-s*4)} ${y-23}" fill="none" stroke="var(--brand-text)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>`;
+      g+=`<circle cx="${r1(x1)}" cy="${y}" r="5" fill="var(--brand-text)"/><circle cx="${r1(x2)}" cy="${y}" r="6" fill="var(--lamp)" stroke="var(--surface)" stroke-width="2"/>`+T((x1+x2)/2,y-42,`${N(Math.abs(d))} وحدات إلى ${d>0?"اليمين":"اليسار"}`,{size:11.5,rtl:true,fill:"var(--ink-2)"});
+      return{svg:svg(L.W,90,g,`من ${NEG(a)} أتحرك ${N(Math.abs(d))} وحدات إلى ${d>0?"اليمين":"اليسار"}`),cap:hide?`أبدأ من ${a<0?"−"+(-a):a}، ثم أتحرك ${Math.abs(d)} وحدات إلى ${d>0?"اليمين":"اليسار"}. أين أصل؟`:`أبدأ من ${a<0?"−"+(-a):a}، ثم أتحرك ${Math.abs(d)} وحدات إلى ${d>0?"اليمين":"اليسار"}، فأصل إلى ${e<0?"−"+(-e):e}.`};},
+    /* --- counters: a + chip and a − chip cancel each other --- */
+    chips(arg){const p=String(arg||"").split(","),a=parseInt(p[0],10),b=parseInt(p[1],10),hide=p[2]==="?";if(!a||!b||Math.abs(a)>10||Math.abs(b)>10)return null;
+      const n=Math.max(Math.abs(a),Math.abs(b)),pairs=a*b<0?Math.min(Math.abs(a),Math.abs(b)):0,st=27,pad=10,W=pad*2+n*st,H=pad*2+st*2+4;let g="";
+      const chip=(x,y,pos)=>`<circle cx="${x}" cy="${y}" r="10.5" fill="${pos?"var(--lamp)":"var(--brand-text)"}"/><path d="M${x-5} ${y}h10${pos?`M${x} ${y-5}v10`:""}" stroke="${pos?"var(--on-lamp)":"var(--on-brand)"}" stroke-width="2.4" stroke-linecap="round"/>`;
+      [[a,0],[b,1]].forEach(([v,r])=>{for(let k=0;k<Math.abs(v);k++){const x=AR?W-pad-st/2-k*st:pad+st/2+k*st;g+=chip(x,pad+st/2+r*(st+4),v>0);}});
+      for(let k=0;k<pairs;k++){const x=AR?W-pad-st/2-k*st:pad+st/2+k*st;g+=`<line x1="${x+9}" y1="${pad+2}" x2="${x-9}" y2="${H-pad-2}" stroke="var(--ink)" stroke-width="2" stroke-linecap="round" opacity=".75"/>`;}
+      const f=v=>v<0?"−"+(-v):String(v);
+      return{svg:svg(W,H,g,`${N(Math.abs(a))} قطع ${a>0?"موجبة":"سالبة"} و ${N(Math.abs(b))} قطع ${b>0?"موجبة":"سالبة"}`),cap:hide?"كل قطعة موجبة تلغي قطعة سالبة. كم قطعة تبقى، وما إشارتها؟":`كل قطعة موجبة تلغي قطعة سالبة: ${f(a)} + ${b<0?"("+f(b)+")":f(b)} = ${f(a+b)}`};},
+    /* --- the sign rule for multiplying, seen as a pattern --- */
+    pattern(arg){const p=String(arg||"").split(","),m=parseInt(p[0],10),hide=p[1]==="?";if(!m||Math.abs(m)>12)return null;const f=v=>v<0?"("+"−"+(-v)+")":String(v),g=v=>v<0?"−"+(-v):String(v);
+      const ks=[2,1,0,-1,-2],lines=ks.map((k,i)=>`<div><span class="m">${M(`${f(k)} × ${f(m)} = `)}${hide&&i===ks.length-1?'<span class="abox" aria-label="الجواب"></span>':M(g(k*m))}</span></div>`);
+      return{svg:`<div class="steps" role="img" aria-label="نمط نواتج الضرب">${lines.join("")}</div>`,cap:`في كل سطر ${m<0?"يزيد":"ينقص"} الناتج ${Math.abs(m)}.`};},
+    /* --- the distributive property as the area of a rectangle cut in two --- */
+    dist(arg){const p=String(arg||"").split(","),a=parseInt(p[0],10),v=(p[1]||"x").trim(),b=parseInt(p[2],10);if(!(a>0)||!(b>0)||!/^[a-z]$/.test(v))return null;
+      const wv=120,wb=66,h=70,pad=12,side=30,top=24,W=pad*2+side+wv+wb,H=pad+top+h+pad,xs=AR?pad:pad+side,xv=AR?xs+wb:xs,xb=AR?xs:xs+wv,y=pad+top;let g="";
+      g+=`<rect x="${xv}" y="${y}" width="${wv}" height="${h}" fill="var(--brand-soft)" stroke="var(--brand-text)" stroke-width="2.2"/><rect x="${xb}" y="${y}" width="${wb}" height="${h}" fill="var(--glow-soft)" stroke="var(--brand-text)" stroke-width="2.2"/>`;
+      g+=T(xv+wv/2,y-12,arMath(v),{size:16})+T(xb+wb/2,y-12,N(b),{size:16})+T(AR?W-pad-side/2+4:pad+side/2-4,y+h/2,N(a),{size:16});
+      g+=T(xv+wv/2,y+h/2,arMath(a+v),{size:18,rtl:AR,fill:"var(--brand-text)"})+T(xb+wb/2,y+h/2,N(a*b),{size:18});
+      return{svg:svg(W,H,g,`مستطيل عرضه ${N(a)} مقسوم إلى جزأين`),cap:`مساحة المستطيل كله = مجموع مساحتَي الجزأين: ${a}(${v} + ${b}) = ${a}${v} + ${a*b}`};},
+    /* --- the numerical value of an expression: substitute, then follow the order of operations --- */
+    subst(arg){const m=String(arg||"").match(/^(.+);\s*([a-z])\s*=\s*(-?\d+)$/);if(!m)return null;const expr=m[1].trim(),v=m[2],val=parseInt(m[3],10),V=val<0?"(−"+(-val)+")":String(val);
+      const num=expr.replace(/-/g,"−").replace(new RegExp("(\\d*)"+v+"([²³⁴⁵]?)","g"),(_,c,sp)=>(c?c+" × ":"")+V+sp);if(/[a-z]/.test(num))return null;const lines=runSteps(num);if(!lines)return null;
+      const head=`<div><span class="m">${M(expr.replace(/-/g,"−"))}</span><span class="note m">${M(v+" = "+(val<0?"−"+(-val):String(val)))}</span></div>`;
+      return{svg:`<div class="steps" role="img" aria-label="خطوات إيجاد القيمة العددية">${head}${lines.map(l=>`<div><span class="m">= ${l}</span></div>`).join("")}</div>`,cap:"أضع العدد مكان المتغير بين قوسين، ثم أحسب بالترتيب."};},
+    /* --- solving ax + b = c the way the book does: add the opposite of b to both sides, then divide by a --- */
+    solve(arg){const p=String(arg||"").split(","),a=parseInt(p[0],10),b=parseInt(p[1],10)||0,c=parseInt(p[2],10),v=(p[3]||"x").trim();if(!a||!isFinite(c)||(c-b)%a!==0)return null;
+      const g=n=>n<0?"−"+(-n):String(n),ax=(a===1?"":a===-1?"−":g(a))+v,left=b?`${ax} ${b<0?"−":"+"} ${Math.abs(b)}`:ax,opp=-b,addOpp=opp<0?`+ (−${-opp})`:`+ ${opp}`,rows=[];
+      rows.push([`${left} = ${g(c)}`,""]);
+      if(b){rows.push([`${left} ${addOpp} = ${g(c)} ${addOpp}`,`أضيف معكوس ${g(b)} إلى الطرفين`]);rows.push([`${ax} = ${g(c-b)}`,""]);}
+      if(a!==1)rows.push([`${v} = ${g((c-b)/a)}`,`أقسم الطرفين على ${g(a)}`]);
+      return{svg:`<div class="steps" role="img" aria-label="خطوات حل المعادلة">${rows.map(([e,n])=>`<div><span class="m">${M(e)}</span>${n?`<span class="note">${AR?arNum(n):n}</span>`:""}</div>`).join("")}</div>`,cap:"ما أفعله في طرف أفعله في الطرف الآخر، فيبقى الطرفان متساويين."};}
   };
   function make(spec){
     const m=String(spec||"").match(/^([a-z]+)(?::(.*))?$/);if(!m||!KINDS[m[1]])return null;

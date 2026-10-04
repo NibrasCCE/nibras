@@ -414,4 +414,6 @@ body:not(.has-tabs) .tabbar{display:none!important}
 .fb .figs{margin-top:6px;background:var(--surface);border-radius:12px;padding:12px 10px}
 /* order of operations, one step per line (figures.js "steps") */
 .steps{display:grid;gap:8px;justify-items:start;font-size:1.3rem;line-height:2}
+.steps>div{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 14px}
+.steps .note{font-size:.82rem;color:var(--ink-3);font-weight:500;line-height:1.5}
 .steps .hl{background:var(--glow-soft);border-bottom:3px solid var(--lamp);border-radius:6px;padding:.05em .3em}
