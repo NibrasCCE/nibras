@@ -7,3 +7,4 @@ supabase/.branches/
 README.md
 # tutor instructions stay on the server only (the repo and the site are public)
 supabase/functions/nibras-ai/nibras-system-prompt.ts
+supabase/functions/nibras-ai/nibras-teacher-prompt.ts

@@ -10,6 +10,7 @@
 //   NIBRAS_MODEL_MAIN        (optional)  model for chat + reports
 //   NIBRAS_DAILY_LIMIT       (optional)  AI messages per user per day (default 60)
 //   NIBRAS_ALLOWED_ORIGINS   (optional)  e.g. https://name.github.io  (comma-separated; default *)
+//   NIBRAS_TEACHER_MAX_TOKENS (optional) longest reply in teacher mode (default 3000)
 // Deploy with "Verify JWT" OFF — this function checks the user itself.
 //
 // Chat requests ({kind:"chat"}) get the tutor's instructions from
@@ -17,10 +18,21 @@
 // change them. The page only sends codes (level, skill, misconception ids);
 // nibras-catalog.ts turns them into names. Other requests (diagnosis,
 // report) are forwarded as they are.
+//
+// Teacher mode ({kind:"teacher"}) is a separate assistant for the teacher:
+// its instructions are in nibras-teacher-prompt.ts, with the misconception
+// library from nibras-catalog.ts. Only a "teacher" profile may use it, and
+// its replies may be longer. The student tutor is not affected.
+//
+// A plain GET returns the size and SHA-256 of the two instruction texts,
+// so a deployment can be checked without showing the texts themselves.
 // =====================================================================
 
 import { buildSystemPrompt, SYSTEM_PROMPT } from "./nibras-system-prompt.ts";
-import { LEVEL_NAMES, MIS_TITLES, SKILL_TITLES } from "./nibras-catalog.ts";
+import { buildTeacherPrompt } from "./nibras-teacher-prompt.ts";
+import { LEVEL_NAMES, MIS_LIBRARY, MIS_TITLES, SKILL_TITLES } from "./nibras-catalog.ts";
+
+const TEACHER_SYSTEM = buildTeacherPrompt(MIS_LIBRARY);
 
 const pick = (map: Record<string, string>, k: unknown): string | undefined =>
   typeof k === "string" && Object.hasOwn(map, k) ? map[k] : undefined;
@@ -32,6 +44,12 @@ const DAILY_LIMIT = Number(Deno.env.get("NIBRAS_DAILY_LIMIT") ?? "60");
 const ALLOWED = (Deno.env.get("NIBRAS_ALLOWED_ORIGINS") ?? "*").split(",").map((s) => s.trim()).filter(Boolean);
 const SUPABASE_URL = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/$/, "");
 const MAX_INPUT_CHARS = 120_000;
+const TEACHER_MAX_TOKENS = Math.max(500, Math.min(4000, Number(Deno.env.get("NIBRAS_TEACHER_MAX_TOKENS") ?? "3000") || 3000));
+
+async function sha256(text: string): Promise<string> {
+  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 function publicKey(req: Request): string {
   const fromClient = req.headers.get("apikey");
@@ -49,7 +67,7 @@ function corsHeaders(req: Request): Record<string, string> {
   return {
     "Access-Control-Allow-Origin": allow,
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Vary": "Origin",
   };
 }
@@ -65,6 +83,15 @@ type Turn = { role: "user" | "assistant"; content: unknown };
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
+  if (req.method === "GET") {
+    return reply(req, 200, {
+      function: "nibras-ai",
+      student_prompt: { chars: SYSTEM_PROMPT.length, sha256: await sha256(SYSTEM_PROMPT) },
+      teacher_prompt: { chars: TEACHER_SYSTEM.length, sha256: await sha256(TEACHER_SYSTEM), library: MIS_LIBRARY.length },
+      catalog: await sha256(JSON.stringify([LEVEL_NAMES, SKILL_TITLES, MIS_TITLES, MIS_LIBRARY])),
+      teacher_max_tokens: TEACHER_MAX_TOKENS,
+    });
+  }
   if (req.method !== "POST") return reply(req, 405, { error: "method_not_allowed" });
 
   const origin = req.headers.get("Origin") ?? "";
@@ -79,6 +106,7 @@ Deno.serve(async (req: Request) => {
   if (!token) return reply(req, 401, { error: "session_expired" });
   const who = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { apikey: key, Authorization: `Bearer ${token}` } });
   if (!who.ok) return reply(req, 401, { error: "session_expired" });
+  const me = await who.json().catch(() => ({})) as { id?: string };
 
   // 2) daily limit per user
   const usage = await fetch(`${SUPABASE_URL}/rest/v1/rpc/bump_ai_usage`, {
@@ -117,7 +145,16 @@ Deno.serve(async (req: Request) => {
   if (total > MAX_INPUT_CHARS) return reply(req, 413, { error: "prompt_too_large" });
 
   const messages: { role: string; content: unknown }[] = turns.map((t) => ({ role: t.role, content: t.content }));
-  const imgs = Array.isArray(body.images) ? body.images.slice(0, 2) : [];
+  // teacher mode: only for a "teacher" profile (the guest teacher), never for a student account
+  const teacher = body.kind === "teacher";
+  if (teacher) {
+    const pr = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=role&id=eq.${encodeURIComponent(String(me.id ?? ""))}`, {
+      headers: { apikey: key, Authorization: `Bearer ${token}` },
+    });
+    const rows = pr.ok ? await pr.json().catch(() => []) : [];
+    if (!Array.isArray(rows) || rows[0]?.role !== "teacher") return reply(req, 403, { error: "teacher_only" });
+  }
+  const imgs = !teacher && Array.isArray(body.images) ? body.images.slice(0, 2) : [];
   if (imgs.length) {
     const lastUser = messages[messages.length - 1];
     lastUser.content = [
@@ -128,7 +165,10 @@ Deno.serve(async (req: Request) => {
   }
   // the tutor's instructions: only for the chat, and only built here
   let system: { type: "text"; text: string; cache_control?: { type: "ephemeral" } }[] | undefined;
-  if (body.kind === "chat") {
+  if (teacher) {
+    // the whole text is the same for every teacher, so it can be cached by the API
+    system = [{ type: "text", text: TEACHER_SYSTEM, cache_control: { type: "ephemeral" } }];
+  } else if (body.kind === "chat") {
     const c = body.ctx ?? {};
     const full = buildSystemPrompt({
       level: pick(LEVEL_NAMES, c.level),
@@ -142,7 +182,8 @@ Deno.serve(async (req: Request) => {
     if (rest) system.push({ type: "text", text: rest });
   }
   const model = body.tier === "quick" ? MODEL_QUICK : MODEL_MAIN;
-  const max_tokens = Math.max(64, Math.min(1500, Number(body.max_tokens) || 1000));
+  // a teacher's reply (five short parts and sometimes a drawing) needs more room than a tutoring turn
+  const max_tokens = teacher ? TEACHER_MAX_TOKENS : Math.max(64, Math.min(1500, Number(body.max_tokens) || 1000));
 
   // 4) ask Claude
   let res: Response;

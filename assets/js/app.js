@@ -118,6 +118,10 @@ function arProse(raw){
 /* LaTeX from the tutor ($…$) drawn in the school notation: stacked fractions, raised powers,
    Arabic digits and letters. Only the simple commands the tutor is told to use are understood. */
 const TEX_SYM={times:"×",cdot:"×",div:"÷",le:"≤",leq:"≤",ge:"≥",geq:"≥",ne:"≠",neq:"≠",pm:"±",sum:"∑",approx:"≈",pi:"π",lt:"<",gt:">",cdots:"…",ldots:"…",dots:"…",left:"",right:"",quad:" ",qquad:" ",",":" ",";":" "," ":" ","!":""};
+/* teacher mode only (MD_RICH): more commands, so nothing is left raw. Arrows point the way the line is read. */
+let MD_RICH=false;
+const TEX_RICH=Object.assign({square:"▢",Box:"▢",checkmark:"✓",ast:"×",colon:":",infty:"∞",circ:"°",degree:"°",angle:"∠",triangle:"△",therefore:"∴",because:"∵",mid:"|",vert:"|",lvert:"|",rvert:"|",displaystyle:"",textstyle:"",limits:"",Leftrightarrow:"⇔",leftrightarrow:"↔",iff:"⇔","\\":" ","$":"","&":""},
+  AR_MATH?{Rightarrow:"⇐",Longrightarrow:"⇐",implies:"⇐",rightarrow:"←",longrightarrow:"←",to:"←",Leftarrow:"⇒",leftarrow:"→"}:{Rightarrow:"⇒",Longrightarrow:"⇒",implies:"⇒",rightarrow:"→",longrightarrow:"→",to:"→",Leftarrow:"⇐",leftarrow:"←"});
 function texHTML(t,depth){
   t=String(t);depth=depth||0;if(depth>6)return esc(t);
   const grp=i=>{let d=0;for(let j=i;j<t.length;j++){if(t[j]==="{")d++;else if(t[j]==="}"){d--;if(!d)return[t.slice(i+1,j),j+1];}}return[t.slice(i+1),t.length];};
@@ -132,11 +136,16 @@ function texHTML(t,depth){
       else if(name==="overline"||name==="bar"){const [x,j]=arg(i);i=j;out+=`<span class="oline">${texHTML(x,depth+1)}</span>`;}
       else if(name==="text"||name==="mathrm"||name==="textbf"){const [x,j]=arg(i);i=j;out+=esc(arNum(x));}
       else if(name==="%")out+=AR_MATH?"٪":"%";
+      else if(MD_RICH&&(name==="begin"||name==="end")){const [,j]=arg(i);i=j;}
+      else if(MD_RICH&&/^(boxed|underline|cancel|mathbf|mathit|mathbb|boldsymbol|operatorname)$/.test(name)){const [x,j]=arg(i);i=j;out+=texHTML(x,depth+1);}
+      else if(MD_RICH&&/^(textit|textrm|mbox)$/.test(name)){const [x,j]=arg(i);i=j;out+=esc(arNum(x));}
+      else if(MD_RICH&&name==="\\")out+=depth?" ":"<br>";
+      else if(MD_RICH&&TEX_RICH[name]!==undefined)out+=esc(TEX_RICH[name]);
       else out+=esc(TEX_SYM[name]!==undefined?TEX_SYM[name]:name.length===1?name:"");
     }
     else if(c==="^"||c==="_"){const [x,j]=arg(i+1);i=j;out+=c==="^"?`<sup>${texHTML(x,depth+1)}</sup>`:`<sub>${texHTML(x,depth+1)}</sub>`;}
     else if(c==="{"||c==="}")i++;
-    else{let j=i;while(j<t.length&&!"\\^_{}".includes(t[j]))j++;out+=esc(arMath(t.slice(i,j).replace(/-/g,"−").replace(/\*/g,"×")));i=j;}
+    else{let j=i;while(j<t.length&&!"\\^_{}".includes(t[j]))j++;out+=esc(arMath((MD_RICH?t.slice(i,j).replace(/&/g,""):t.slice(i,j)).replace(/-/g,"−").replace(/\*/g,"×")));i=j;}
   }
   return out;
 }
@@ -146,7 +155,54 @@ function tex(t){
   return `<span class="m">${esc(t)}</span>`;
 }
 function inline(s){
+  if(MD_RICH)return String(s).split(/(\$\$[^$\n]+\$\$|\$[^$\n]+\$|\bm\d{2}\b)/g).map(p=>/^\$\$[^$]+\$\$$/.test(p)?tex(p.slice(2,-2)):/^\$[^$]+\$$/.test(p)?tex(p.slice(1,-1))
+      :/^m\d{2}$/.test(p)?`<bdi class="mcode" data-latin${misById[p]?` title="${esc(misById[p].title)}"`:""}>${p}</bdi>`:mathify(p.replace(/`+/g,"").replace(/\$/g,""))).join("")
+    .replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>").replace(/(^|[^*])\*([^*\s](?:[^*]*[^*\s])?)\*(?!\*)/g,"$1<em>$2</em>");
   return String(s).split(/(\$\$[^$\n]+\$\$|\$[^$\n]+\$)/g).map(p=>/^\$\$[^$]+\$\$$/.test(p)?tex(p.slice(2,-2)):/^\$[^$]+\$$/.test(p)?tex(p.slice(1,-1)):mathify(p)).join("").replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>");
+}
+/* a drawing written by the model (teacher mode): rebuilt element by element from a short allow-list, so no script,
+   style, link, image or event handler can get through. Text is shown in the school notation. */
+const SVG_OK=new Set(["svg","g","rect","circle","ellipse","line","polyline","polygon","path","text","tspan","title","desc"]);
+const SVG_AT=new Set(["viewbox","x","y","x1","y1","x2","y2","cx","cy","r","rx","ry","width","height","d","points","fill","stroke","stroke-width","stroke-dasharray","stroke-linecap","stroke-linejoin","opacity","fill-opacity","stroke-opacity","transform","font-size","font-weight","text-anchor","dominant-baseline","dx","dy"]);
+function svgHTML(src){
+  src=String(src);if(src.length>20000)return"";
+  let root=null;try{root=new DOMParser().parseFromString(src,"text/html").querySelector("svg");}catch(e){}
+  if(!root)return"";
+  const NS="http://www.w3.org/2000/svg";let n=0;
+  const copy=(el,top)=>{
+    const tag=String(el.localName||"").toLowerCase();if(!SVG_OK.has(tag)||++n>300)return null;
+    const out=document.createElementNS(NS,tag);
+    for(const a of Array.from(el.attributes)){
+      const k=a.name.toLowerCase(),v=String(a.value).trim();
+      if(!SVG_AT.has(k))continue;
+      if(v.length>(k==="d"||k==="points"?6000:120)||/[<>]|url\s*\(|javascript:|expression|&#/i.test(v)){if(k==="fill")out.setAttribute("fill","#e5e7eb");continue;}
+      if(top&&k!=="viewbox")continue;
+      out.setAttribute(k==="viewbox"?"viewBox":k,v);
+    }
+    if(tag==="text"&&AR_MATH){const a=out.getAttribute("text-anchor");out.setAttribute("direction","rtl");out.setAttribute("text-anchor",a==="middle"?"middle":a==="end"?"start":"end");}
+    for(const c of Array.from(el.childNodes)){
+      if(c.nodeType===3){if(/^(text|tspan|title|desc)$/.test(tag)){
+        let t=c.nodeValue.replace(/\s+/g," ");if(!t.trim())continue;
+        if(AR_MATH)t=arProse(t.replace(/\$/g,"").replace(/-(?=\s?[0-9٠-٩])/g,"−"));
+        /* a power (3² or 3^2) is raised, as in the book */
+        const parts=t.replace(/[²³⁴⁵]/g,x=>"^"+(AR_MATH?arDigits(SUPS[x]):SUPS[x])).split(/\^([0-9٠-٩]+)/);
+        parts.forEach((x,i)=>{if(!x)return;
+          const mk=AR_MATH?"\u200F":""; /* keeps the power on the left of its base, as in the book */
+          if(i%2){const sp=document.createElementNS(NS,"tspan");sp.setAttribute("dy","-0.55em");sp.setAttribute("font-size","70%");sp.textContent=mk+x+mk;out.appendChild(sp);}
+          else if(i){const sp=document.createElementNS(NS,"tspan");sp.setAttribute("dy","0.385em");sp.textContent=x;out.appendChild(sp);}
+          else out.appendChild(document.createTextNode(x));});
+      }}
+      else if(c.nodeType===1){const k=copy(c,false);if(k)out.appendChild(k);}
+    }
+    return out;
+  };
+  const out=copy(root,true);if(!out||!out.childNodes.length)return"";
+  const num=v=>{const x=parseFloat(v);return isFinite(x)&&x>0?x:0;};
+  let vb=String(out.getAttribute("viewBox")||"").trim().split(/[\s,]+/).map(Number);
+  if(vb.length!==4||vb.some(x=>!isFinite(x))||vb[2]<=0||vb[3]<=0)vb=[0,0,num(root.getAttribute("width"))||320,num(root.getAttribute("height"))||200];
+  out.setAttribute("viewBox",vb.join(" "));out.setAttribute("class","figsvg usvg");out.setAttribute("role","img");out.setAttribute("direction","ltr");
+  out.setAttribute("style","max-width:"+Math.round(Math.min(520,Math.max(240,vb[2]*1.4)))+"px");
+  return `<figure class="fig chatfig">${out.outerHTML}</figure>`;
 }
 /* a drawing the tutor asked for: <draw>{…}</draw> (figures.js checks the numbers and draws it) */
 function drawHTML(json){
@@ -157,11 +213,12 @@ function drawHTML(json){
 /* o.game(json): how a <game>{…}</game> tag is shown (only the chat passes it) */
 function md(text,o){
   o=o||{};
+  if(o.rich){MD_RICH=true;try{return md(richPrep(text,o.svgs=[]),Object.assign({},o,{rich:false,rich2:true}));}finally{MD_RICH=false;}}
   const src=String(text).replace(/\s*(<game>[\s\S]*?<\/game>|<draw>[\s\S]*?<\/draw>|<image\b[^>]*\/?>)\s*/g,(_,t)=>"\n"+t.replace(/\s*\n\s*/g," ")+"\n")
     .replace(/<(game|draw)>[^\n]*$/,"");                                   /* a tag still being written is not shown */
   const lines=src.split("\n"); let html="",list=null,para=[],tbl=null;
   const fp=()=>{if(para.length){html+=`<p>${para.map(inline).join("<br>")}</p>`;para=[];}};
-  const fl=()=>{if(list){html+=`<${list.t}>${list.items.map(i=>`<li>${inline(i)}</li>`).join("")}</${list.t}>`;list=null;}};
+  const fl=()=>{if(list){html+=`<${list.t}${list.start>1?` start="${list.start}"`:""}>${list.items.map(i=>`<li>${inline(i)}</li>`).join("")}</${list.t}>`;list=null;}};
   const ft=()=>{if(tbl){const rows=tbl.rows.slice(0,9).map(r=>r.slice(0,4)),head=tbl.head&&rows.length>1?rows.shift():null;
     html+=`<div class="tblwrap"><table class="mtbl">${head?`<thead><tr>${head.map(c=>`<th>${inline(c)}</th>`).join("")}</tr></thead>`:""}<tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${inline(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;tbl=null;}};
   const all=()=>{fp();fl();ft();};
@@ -171,19 +228,43 @@ function md(text,o){
     if(dr){all();html+=drawHTML(dr[1]);continue;}
     if(/^<image\b[^>]*\/?>$/.test(t)){all();continue;}                    /* no approved pictures yet */
     if(dm){all();html+=`<div class="dmath">${tex(dm[1])}</div>`;continue;}
+    if(o.rich2){
+      const sv=t.match(/^\u0001(\d+)\u0001$/),hd=t.match(/^#{1,6}\s+(.*)$/);
+      if(sv){all();html+=svgHTML(o.svgs[+sv[1]]);continue;}
+      if(hd){all();html+=`<h4 class="mh">${inline(hd[1].replace(/\s*#+$/,""))}</h4>`;continue;}
+      if(/^([-*_])(\s*\1){2,}$/.test(t)){all();html+='<hr class="mhr">';continue;}
+    }
     if(/^\|.*\|$/.test(t)){fp();fl();
       if(/^\|[\s:|-]+\|$/.test(t)){if(tbl)tbl.head=true;}
       else{if(!tbl)tbl={rows:[],head:false};tbl.rows.push(t.slice(1,-1).split("|").map(c=>c.trim()));}
       continue;}
     ft();
     const ol=ln.match(/^\s*([0-9٠-٩]+)[.)]\s+(.*)$/),u=ln.match(/^\s*[-•*]\s+(.*)$/);
-    if(ol){fp();if(!list||list.t!=="ol"){fl();list={t:"ol",items:[]};}list.items.push(ol[2]);}
+    if(ol){fp();if(!list||list.t!=="ol"){fl();list={t:"ol",items:[]};if(o.rich2)list.start=parseInt(ol[1].replace(/[٠-٩]/g,d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d)),10)||1;}list.items.push(ol[2]);}
     else if(u){fp();if(!list||list.t!=="ul"){fl();list={t:"ul",items:[]};}list.items.push(u[1]);}
     else if(!t){fp();fl();}
     else{fl();para.push(ln.replace(/^#{1,4}\s+/,""));}
   }
   all();return html;
 }
+/* teacher mode: tidy the model's Markdown before it is drawn. Drawings are taken out (and put back by number),
+   LaTeX brackets become $…$, code fences and quote marks are dropped, a drawing still being written is hidden. */
+function richPrep(text,svgs){
+  return String(text)
+    .replace(/```(?:svg|xml|html)?[ \t]*\n?\s*(<svg[\s\S]*?<\/svg>)\s*\n?```/gi,(_,g)=>"\n\u0001"+(svgs.push(g)-1)+"\u0001\n")
+    .replace(/<svg[\s\S]*?<\/svg>/gi,g=>"\n\u0001"+(svgs.push(g)-1)+"\u0001\n")
+    .replace(/```(?:svg|xml|html)?[ \t]*\n?\s*<svg[\s\S]*$/i,"").replace(/<svg[\s\S]*$/i,"")
+    .replace(/^[ \t]*```[\w-]*[ \t]*$/gm,"")
+    .replace(/\$\$([\s\S]+?)\$\$/g,(a,m)=>m.includes("\n")?"\n$$"+m.trim().replace(/\s*\n\s*/g," ")+"$$\n":a)
+    .replace(/\\\[([\s\S]+?)\\\]/g,(_,m)=>"\n$$"+m.trim().replace(/\s*\n\s*/g," ")+"$$\n").replace(/\\\(([\s\S]+?)\\\)/g,(_,m)=>"$"+m.trim().replace(/\s*\n\s*/g," ")+"$")
+    .replace(/^[ \t]*>[ \t]?/gm,"");
+}
+/* a reply that stopped at the length limit and its continuation are shown as one message */
+function joinCut(a,b){
+  a=String(a).replace(/```(?:svg|xml|html)?[ \t]*\n?\s*<svg(?:(?!<\/svg>)[\s\S])*$/i,"").replace(/<svg(?:(?!<\/svg>)[\s\S])*$/i,"").trimEnd();b=String(b).trim();
+  return a+(/[.:،؛؟!]$/.test(a)||/^([-•*#>|]|[0-9٠-٩]+[.)]|```|<svg|\$\$)/.test(b)?"\n":" ")+b;
+}
+const CONT_MSG="أكمل ردّك السابق من النقطة التي انقطع عندها مباشرةً، بلا مقدمة وبلا تكرار لما كتبته. إذا انقطع الرد داخل رسم فأعد كتابة الرسم كاملاً.";
 const today=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");};
 const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
 function toast(msg){const t=$("#toast");t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2600);}
@@ -417,7 +498,7 @@ function vLanding(){
       <div class="roles">
         <a class="rolebtn primary" href="#auth-student">${IC_KID}<b>دخول الطلاب</b><span>العب واكتشف مستواك</span></a>
         <a class="rolebtn" href="#auth-parent">${IC_PAR}<b>دخول الأهالي</b><span>تابع تقارير ابنك أو بنتك</span></a>
-        <button class="rolebtn" id="guest-teacher" type="button" style="grid-column:1/-1;font:inherit;cursor:pointer">${IC_TEACH}<b>دخول المعلمين (زائر)</b><span>جرّب المعلم الافتراضي «نبراس» بدون حساب</span></button>
+        <button class="rolebtn" id="guest-teacher" type="button" style="grid-column:1/-1;font:inherit;cursor:pointer">${IC_TEACH}<b>دخول المعلمين (زائر)</b><span>مساعد للمعلمة: سبب خطأ الطالبة وطريقة علاجه، بدون حساب</span></button>
       </div>
     </div>
     <div class="steps">
@@ -1248,28 +1329,32 @@ function siteContext(){
   return L.join("\n");
 }
 const vis=t=>String(t).replace(/<<[^>]*>>/g,"").replace(/<<[^>]*$/,"").replace(/<$/,"").trim();
-async function send(text){
-  text=String(text||"").trim();const file=CHAT.file;
+async function send(text,o){
+  o=o||{};
+  text=String(text||"").trim();const file=CHAT.file;const teacher=isGuest();
   if((!text&&!file)||CHAT.busy||!sampleFn)return;
   const t=today();if(S.chat.day!==t){S.chat.day=t;S.chat.count=0;}
   if(S.chat.count>=DAILY_LIMIT){CHAT.err=`وصلت لحد اليوم (${DAILY_LIMIT} رسالة). بنكمل بكرة إن شاء الله!`;drawChat();return;}
   const content=(text||"هاي صورة حلّي، شو رأيك؟")+(file?"\n[أرفق الطالب صورة لحلّه المكتوب]":"");
-  S.chat.turns.push({role:"user",content});S.chat.count++;
+  S.chat.turns.push(o.cont?{role:"user",content,cont:true}:{role:"user",content});S.chat.count++;
   CHAT.file=null;CHAT.busy=true;CHAT.stream="";CHAT.err="";save();drawChat();
   const hist=S.chat.turns.slice(-16).map(x=>({role:x.role,content:x.content}));
   while(hist.length&&hist[0].role!=="user")hist.shift();
   /* on Supabase the tutor's instructions are added by the Edge Function; the page sends its context and a few codes.
      Without a server (local demo) the older instructions in this file are used. */
   const edge=Store.mode==="supabase"&&!(window.claude&&typeof window.claude.use==="function");
-  const input=edge?[{role:"user",content:siteContext()},...hist]:[{role:"user",content:PROMPT+"\n\n"+context()},...hist];
+  /* teacher mode: a separate assistant whose instructions (and the misconception library) are on the server; only the conversation is sent */
+  const input=teacher?hist:edge?[{role:"user",content:siteContext()},...hist]:[{role:"user",content:PROMPT+"\n\n"+context()},...hist];
   const ctl=new AbortController();CHAT.ctl=ctl;
   try{
     const opts={cache:false,signal:ctl.signal,onText:({text})=>{CHAT.stream=vis(text);paintStream();}};
     if(file)opts.images=file;
-    if(edge){opts.kind="chat";opts.ctx=chatCtx();}
+    if(edge&&teacher)opts.kind="teacher";
+    else if(edge){opts.kind="chat";opts.ctx=chatCtx();}
     const res=await sampleFn(input,opts);
     [...String(res.text).matchAll(/<<\s*misconception\s*:\s*(m\d{2})\s*>>/gi)].forEach(m=>bump(m[1].toLowerCase()));
-    S.chat.turns.push({role:"assistant",content:vis(res.text)+(res.truncated?"\n\n(انقطع الرد، اطلب مني أكمّل)":"")});
+    if(teacher)S.chat.turns.push({role:"assistant",content:vis(res.text),cut:!!res.truncated}); /* a cut reply gets an «أكمل» button */
+    else S.chat.turns.push({role:"assistant",content:vis(res.text)+(res.truncated?"\n\n(انقطع الرد، اطلب مني أكمّل)":"")});
   }catch(e){
     const c=e&&e.code;
     if(e&&e.text&&c!=="refused")S.chat.turns.push({role:"assistant",content:vis(e.text)+"\n\n(انقطع الرد)"});
@@ -1284,7 +1369,7 @@ async function send(text){
     else if(c!=="cancelled")CHAT.err="انقطع الاتصال. جرّب ترسل رسالتك مرة ثانية.";
   }finally{CHAT.busy=false;CHAT.stream="";CHAT.ctl=null;save();drawChat();}
 }
-function paintStream(){const el=$("#live");if(el){el.innerHTML=CHAT.stream?md(CHAT.stream):'<span class="thinking" aria-label="نبراس بيفكّر"><i></i><i></i><i></i></span>';const box=$("#msgs");if(box)box.scrollTop=box.scrollHeight;}}
+function paintStream(){const el=$("#live");if(el){el.innerHTML=CHAT.stream?md(CHAT.stream,isGuest()?{rich:true}:undefined):'<span class="thinking" aria-label="نبراس بيفكّر"><i></i><i></i><i></i></span>';const box=$("#msgs");if(box)box.scrollTop=box.scrollHeight;}}
 function vAsk(){drawChat();}
 function drawChat(){
   if(route()!=="ask")return;
@@ -1295,28 +1380,37 @@ function drawChat(){
   if(CHAT.pad===null)CHAT.pad=padDefault();
   GAME_LIVE=null;
   const pad=CHAT.pad&&!off;
-  const welcome=guest?`أهلاً! أنا نبراس، المعلم الافتراضي. اسألني سؤال رياضيات كأنك طالب بالصف السابع، وشوف كيف بفكّر معك خطوة خطوة بدل ما أعطيك الحل جاهز.`
+  /* teacher mode: a reply and its continuation («أكمل») are one message; the hidden request in between is not shown */
+  const view=[];turns.forEach((x,i)=>{
+    if(x.role==="user"&&x.cont)return;
+    const pv=view[view.length-1];
+    if(x.role==="assistant"&&i>0&&turns[i-1].cont&&pv&&pv.role==="assistant"){pv.content=joinCut(pv.content,x.content);pv.i=i;return;}
+    view.push({role:x.role,content:x.content,i});
+  });
+  const lastT=turns[turns.length-1],cut=guest&&!off&&!CHAT.busy&&!!lastT&&lastT.role==="assistant"&&!!lastT.cut;
+  const welcome=guest?`أهلاً بكِ! أنا نبراس للمعلمة. اكتبي خطأً أو إجابة خاطئة لاحظتِها عند طالبة، وسأقترح سببه المفاهيمي المحتمل، وسؤالاً تشخيصياً، وخطوة علاجية، وتمارين متابعة. القرار النهائي دائماً لكِ.`
     :`أهلاً ${ME().nick}! أنا نبراس. احكيلي شو السؤال اللي محيّرك، وبنفكّر فيه سوا خطوة خطوة. ما رح أعطيك الحل جاهز، بس رح أضل معك لحد ما توصل.`;
   app.innerHTML=`<section class="view">
-    ${guest?`<div class="notice">${IC_INFO}<span><b>وضع المعلم الزائر.</b> بتجرّب المعلم الافتراضي كما بيشوفه الطالب. المحادثة ما بتنحفظ، وبتنمسح لما تطلع أو تحدّث الصفحة. للخروج اضغط «خروج» فوق.</span></div>`:""}
-    <div class="chat ${pad?"pad-open":""}">
-      <div class="chat-head"><span class="appicon">${ICON}</span><div style="flex:1;min-width:0"><b style="color:var(--logo)">نبراس</b><div class="tiny">${loading?"بيجهّز…":off?"مش متاح بهذا العرض":CHAT.busy?"بيكتب…":guest?"المعلم الافتراضي":"معلمك الافتراضي"}</div></div>
+    ${guest?`<div class="notice">${IC_INFO}<span><b>وضع المعلمة:</b> اكتبي خطأً لاحظتِه عند طالبة، وسيقترح نبراس سببه وطريقة علاجه. لا تكتبي أسماء الطالبات.</span></div>`:""}
+    <div class="chat ${pad?"pad-open":""}${guest?" tmode":""}">
+      <div class="chat-head"><span class="appicon">${ICON}</span><div style="flex:1;min-width:0"><b style="color:var(--logo)">${guest?"نبراس للمعلمة":"نبراس"}</b><div class="tiny">${loading?"بيجهّز…":off?"مش متاح بهذا العرض":CHAT.busy?"بيكتب…":guest?"مساعد المعلمة":"معلمك الافتراضي"}</div></div>
         ${turns.length?`<button class="btn btn-line btn-sm" id="clr" type="button">محادثة جديدة</button>`:""}</div>
       <div class="msgs" id="msgs" aria-live="polite">
         <div class="msg bot">${md(welcome)}</div>
-        ${turns.map((x,i)=>x.role==="user"
-          ?`<div class="msg me">${/^\[نتيجة لعبة\]/.test(x.content)?gresHTML(x.content):md(x.content.replace(/\n\[أرفق الطالب صورة لحلّه المكتوب\]$/,"\n(📷 صورة الحل)"))}</div>`
-          :`<div class="msg bot">${md(x.content,{game:j=>gameHTML(j,i===turns.length-1&&!CHAT.busy&&!off)})}</div>`).join("")}
+        ${view.map(({role,content,i})=>role==="user"
+          ?`<div class="msg me">${/^\[نتيجة لعبة\]/.test(content)?gresHTML(content):md(content.replace(/\n\[أرفق الطالب صورة لحلّه المكتوب\]$/,"\n(📷 صورة الحل)"))}</div>`
+          :`<div class="msg bot">${md(content,guest?{rich:true}:{game:j=>gameHTML(j,i===turns.length-1&&!CHAT.busy&&!off)})}</div>`).join("")}
+        ${cut?`<div class="controw"><span>الرد طويل وتوقّف قبل نهايته.</span><button class="btn btn-go btn-sm" id="cont" type="button">أكمل</button></div>`:""}
         ${CHAT.busy?`<div class="msg bot" id="live"></div>`:""}
       </div>
-      ${!turns.length&&!off?`<div class="suggest">${["ما فهمت قسمة الكسور","ليش −4 − 3 = −7؟","كيف بحل 2x − 3 = 11؟"].map(s=>`<button type="button" data-s="${esc(arProse(s))}">${mathify(s)}</button>`).join("")}</div>`:""}
+      ${!turns.length&&!off?`<div class="suggest">${(guest?["طالبة كتبت 1/2 + 1/3 = 2/5","طالبة كتبت 3x + 2x = 6x","طالبة كتبت 3² = 6"]:["ما فهمت قسمة الكسور","ليش −4 − 3 = −7؟","كيف بحل 2x − 3 = 11؟"]).map(s=>`<button type="button" data-s="${esc(arProse(s))}">${mathify(s)}</button>`).join("")}</div>`:""}
       ${CHAT.err?`<div class="note" role="alert">${esc(CHAT.err)}</div>`:""}
       ${off?`<div class="note">${guest?"نبراس مطفي حالياً، فما في إشي تجرّبه هلأ. جرّب بوقت ثاني.":Store.mode==="local"?"نبراس (الذكاء الاصطناعي) بيشتغل بس لما الموقع يكون موصول بـ Supabase. بتقدر تكمل اللعبة والمسار عادي.":"نبراس مطفي حالياً. بتقدر تكمل اللعبة والمسار عادي."}</div>`:""}
       ${CHAT.file?`<div class="note">📷 مرفق: ${esc(CHAT.file.name||"صورة")} <button class="btn btn-line btn-sm" id="rmf" type="button">إزالة</button></div>`:""}
       <form class="composer" id="cf">
-        ${imgOK&&!off?`<label class="iconbtn" title="صوّر حلّك وأرسله" aria-label="أرفق صورة لحلّك"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><input id="cimg" type="file" accept="image/*" hidden></label>`:""}
+        ${imgOK&&!off&&!guest?`<label class="iconbtn" title="صوّر حلّك وأرسله" aria-label="أرفق صورة لحلّك"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><input id="cimg" type="file" accept="image/*" hidden></label>`:""}
         ${off?"":`<button class="iconbtn padt" id="padt" type="button" aria-pressed="${pad}" aria-label="${pad?"ارجع لكيبورد الجهاز":"افتح لوحة الأرقام والرموز"}" title="${pad?"كيبورد الجهاز":"لوحة الأرقام والرموز"}">${pad?"أ ب<small>حروف</small>":`${arMath("123")}<small>رموز</small>`}</button>`}
-        <textarea id="cin" rows="1" ${pad?'inputmode="none"':""} placeholder="${pad?"اكتب من اللوحة تحت…":"اكتب سؤالك هون…"}" aria-label="رسالتك" ${off?"disabled":""}></textarea>
+        <textarea id="cin" rows="1" ${pad?'inputmode="none"':""} placeholder="${guest?(pad?"اكتبي من اللوحة تحت…":"اكتبي خطأ الطالبة هنا…"):pad?"اكتب من اللوحة تحت…":"اكتب سؤالك هون…"}" aria-label="رسالتك" ${off?"disabled":""}></textarea>
         ${CHAT.busy?`<button class="iconbtn" id="stop" type="button" aria-label="أوقف"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>`:
         `<button class="iconbtn send" type="submit" aria-label="أرسل" ${off||loading?"disabled":""}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H5M11 6l-6 6 6 6"/></svg></button>`}
       </form>
@@ -1354,6 +1448,7 @@ function drawChat(){
   const mp=$("#cpad .mpad");
   if(mp)bindPad(mp,cin,()=>pt.click());
   app.querySelectorAll(".suggest button").forEach(b=>b.onclick=()=>send(b.dataset.s));
+  if($("#cont"))$("#cont").onclick=()=>send(CONT_MSG,{cont:true});
   const st=$("#stop");if(st)st.onclick=()=>CHAT.ctl&&CHAT.ctl.abort();
   const cl=$("#clr");if(cl)cl.onclick=()=>{if(CHAT.busy&&CHAT.ctl)CHAT.ctl.abort();S.chat.turns=[];CHAT.err="";save();drawChat();};
   const ci=$("#cimg");if(ci)ci.onchange=()=>{CHAT.file=ci.files&&ci.files[0]||null;drawChat();};

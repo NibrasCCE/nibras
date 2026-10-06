@@ -253,7 +253,9 @@ function edgeAI(store){
         headers:{"Content-Type":"application/json",apikey:CFG.SUPABASE_KEY,Authorization:"Bearer "+session.access_token},
         body:JSON.stringify(Object.assign({messages:turns,tier:opts.modelTier==="quick"?"quick":"main",max_tokens:wantJson?400:1200,images},
           /* the chat: the tutor's instructions are added on the server; only codes are sent (level, skill, misconception ids) */
-          opts.kind==="chat"?{kind:"chat",ctx:opts.ctx||{}}:{}))});
+          opts.kind==="chat"?{kind:"chat",ctx:opts.ctx||{}}:
+          /* teacher mode: a separate assistant; its instructions and reply length are set on the server */
+          opts.kind==="teacher"?{kind:"teacher"}:{}))});
     }catch(e){if(e&&e.name==="AbortError")throw{code:"cancelled"};throw{code:"upstream_error",message:String(e)};}
     let j={};try{j=await res.json();}catch(e){}
     if(!res.ok){

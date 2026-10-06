@@ -479,3 +479,13 @@ body:not(.has-tabs) .tabbar{display:none!important}
 .gres .tag{font-weight:800;font-size:.9rem}
 .msg.me .gres .tag.ok{color:var(--glow)}
 .msg.me .gres .tag.no{color:#FFD9C7}
+
+/* teacher mode in the chat: headings, labels, the model's own drawing, and the «أكمل» row */
+.msg .mh{font-size:1rem;font-weight:800;color:var(--logo);margin:8px 0 2px}
+.msg .mhr{border:0;border-top:1px solid var(--line);margin:8px 0}
+.tmode .msg em{font-style:normal;font-weight:800;color:var(--brand-text)}
+.tmode .msg li+li{margin-top:4px}
+[data-math="ar"] .tmode .msg ol{list-style-type:arabic-indic}
+.mcode{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.85em;font-weight:700;background:var(--glow-soft);border-radius:6px;padding:1px 6px;white-space:nowrap}
+.chatfig .usvg{background:#fff;color:#1f2937;border-radius:10px;font-family:inherit;margin-inline:auto}
+.controw{align-self:flex-start;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:.88rem;color:var(--ink-2)}
