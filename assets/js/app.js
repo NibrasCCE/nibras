@@ -155,8 +155,10 @@ function tex(t){
   return `<span class="m">${esc(t)}</span>`;
 }
 function inline(s){
-  if(MD_RICH)return String(s).split(/(\$\$[^$\n]+\$\$|\$[^$\n]+\$|\bm\d{2}\b)/g).map(p=>/^\$\$[^$]+\$\$$/.test(p)?tex(p.slice(2,-2)):/^\$[^$]+\$$/.test(p)?tex(p.slice(1,-1))
-      :/^m\d{2}$/.test(p)?`<bdi class="mcode" data-latin${misById[p]?` title="${esc(misById[p].title)}"`:""}>${p}</bdi>`:mathify(p.replace(/`+/g,"").replace(/\$/g,""))).join("")
+  /* teacher mode: misconception codes (m62) and Latin words (SVG, cm) stay as written; only single letters are variables */
+  if(MD_RICH)return String(s).split(/(\$\$[^$\n]+\$\$|\$[^$\n]+\$|\bm\d{2}\b|#[0-9a-fA-F]{6}\b|[A-Za-z]{2,}(?:[-_][A-Za-z]+)*)/g).map(p=>/^\$\$[^$]+\$\$$/.test(p)?tex(p.slice(2,-2)):/^\$[^$]+\$$/.test(p)?tex(p.slice(1,-1))
+      :/^m\d{2}$/.test(p)?`<bdi class="mcode" data-latin${misById[p]?` title="${esc(misById[p].title)}"`:""}>${p}</bdi>`
+      :/^(#[0-9a-fA-F]{6}|[A-Za-z]{2,}(?:[-_][A-Za-z]+)*)$/.test(p)?`<bdi data-latin>${esc(p)}</bdi>`:mathify(p.replace(/`+/g,"").replace(/\$/g,""))).join("")
     .replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>").replace(/(^|[^*])\*([^*\s](?:[^*]*[^*\s])?)\*(?!\*)/g,"$1<em>$2</em>");
   return String(s).split(/(\$\$[^$\n]+\$\$|\$[^$\n]+\$)/g).map(p=>/^\$\$[^$]+\$\$$/.test(p)?tex(p.slice(2,-2)):/^\$[^$]+\$$/.test(p)?tex(p.slice(1,-1)):mathify(p)).join("").replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>");
 }
