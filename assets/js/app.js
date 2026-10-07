@@ -543,41 +543,13 @@ function vLanding(){
       <p>أحيانًا ما تكون المشكلة في الدرس الحالي، بل في مهارة سابقة لم تكتمل بعد.</p>
     </section>
 
-    <section class="nb-sec nb-split" aria-labelledby="nb-start-h">
-      <div class="nb-split-text" data-rv>
-        <span class="kick">مسار لكل طالب</span>
-        <h2 id="nb-start-h">كل طالب يبدأ من مكان مختلف.</h2>
-        <p>نبراس لا يفترض أن جميع طلاب الصف السابع في المستوى نفسه. لعبة التشخيص تمرّ على مهارات الصف الخامس والسادس والسابع، وتحدّد أول مهارة ناقصة عند كل طالب.</p>
-        <p class="nb-strong">نبراس يحدّد من أين تبدأ.</p>
-      </div>
-      <figure class="nb-mock" data-rv aria-label="مسار طالبة في نبراس">
-        <div class="nb-mock-top"><span class="nb-av">س</span><div><b>سارة</b><small>الصف السابع</small></div></div>
-        <ol class="nb-skills">
-          <li class="done"><span class="st" aria-hidden="true">✓</span><span>ضرب الكسور وقسمتها</span><small>الصف الخامس</small></li>
-          <li class="done"><span class="st" aria-hidden="true">✓</span><span>النسبة والنسبة المئوية</span><small>الصف السادس</small></li>
-          <li class="now"><span class="st" aria-hidden="true"></span><span>المتغير والمقدار الجبري</span><small>ابدئي من هنا</small></li>
-          <li class="lock"><span class="st" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><span>المعادلة الخطية</span><small>بعد المحطة الحالية</small></li>
-        </ol>
-      </figure>
-    </section>
-
     <section class="nb-sec" id="ls-who-sec" aria-labelledby="ls-who">
       <div class="lsec-head" data-rv><span class="kick">من هو نبراس؟</span><h2 id="ls-who">رحلتك مع نبراس تبدأ من مكانك</h2></div>
       <div class="nb-steps" data-rv>
         <span class="line" aria-hidden="true"></span>
-        <article class="nb-step"><span class="num">01</span><span class="ic"><svg class="step-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" class="f"/><path d="M15.5 15.5L21 21"/><path d="M8 10.5h5M10.5 8v5"/></svg></span><h3>اكتشف</h3><b>نبراس يفهم مستواك</b><p>لعبة قصيرة تساعد على تحديد المهارات التي تحتاج إلى تقوية.</p></article>
+        <article class="nb-step"><span class="num">01</span><span class="ic"><svg class="step-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" class="f"/><path d="M15.5 15.5L21 21"/><path d="M8 10.5h5M10.5 8v5"/></svg></span><h3>اكتشف</h3><b>نبراس يفهم مستواك</b><p>لعبة قصيرة، والذكاء الاصطناعي يقرأ إجاباتك ويكتشف المهارات التي تحتاج إلى تقوية.</p></article>
         <article class="nb-step"><span class="num">02</span><span class="ic"><svg class="step-ic" viewBox="0 0 24 24" aria-hidden="true"><path class="f" d="M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/><path d="M9.5 19h5M10.5 21.5h3"/></svg></span><h3>افهم</h3><b>تعلّم من النقطة التي توقّفت عندها</b><p>شرح مبسّط ومثال من الحياة اليومية، مناسب لمستواك.</p></article>
         <article class="nb-step"><span class="num">03</span><span class="ic"><svg class="step-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9.5" r="6.5" class="f"/><path d="M12 6.4l1 2 2.2.3-1.6 1.5.4 2.2-2-1-2 1 .4-2.2-1.6-1.5 2.2-.3z"/><path d="M8.5 15l-1.5 6.5 5-2.5 5 2.5-1.5-6.5"/></svg></span><h3>أتقن</h3><b>تدرّب حتى تثبت الفكرة</b><p>تمارين تفاعلية، والفانوس يضيء بعد ثلاث إجابات صحيحة متتالية.</p></article>      </div>
-    </section>
-
-    <section class="nb-sec" aria-labelledby="nb-ai-h">
-      <div class="lsec-head" data-rv><span class="kick">الذكاء الاصطناعي في نبراس</span><h2 id="nb-ai-h">نبراس بيفهم ليش غلطت، مش بس إنك غلطت</h2><p>نبراس بيستخدم الذكاء الاصطناعي ليقرأ جوابك، ويكتشف الفكرة اللي محتاجة تقوية، ويختارلك الشرح أو التمرين المناسب.</p></div>      <ol class="nb-flow" data-rv>
-        <li><span class="dot">1</span><b>إجابتك</b><small>تحلّ لغزًا أو تمرينًا</small></li>
-        <li><span class="dot">2</span><b>تحليل أدائك</b><small>صح أو خطأ، ولماذا</small></li>
-        <li><span class="dot">3</span><b>اكتشاف المهارة</b><small>الفكرة التي تحتاج تقوية</small></li>
-        <li><span class="dot">4</span><b>اختيار النشاط</b><small>شرح أو تمرين يناسبك</small></li>
-        <li><span class="dot">5</span><b>تحديث مسارك</b><small>محطتك التالية</small></li>
-      </ol>
     </section>
 
     <section class="nb-sec" aria-labelledby="nb-games-h">
@@ -588,40 +560,11 @@ function vLanding(){
       <div class="nb-more"><button class="btn btn-line btn-sm" type="button" id="nb-more" aria-expanded="false" aria-controls="nb-games">اعرض الألعاب الثلاث الباقية</button></div>
     </section>
 
-    <section class="nb-sec nb-split rev" aria-labelledby="nb-prog-h">
-      <div class="nb-split-text" data-rv>
-        <span class="kick">التقدّم</span>
-        <h2 id="nb-prog-h">وشوف قديش تقدّمت.</h2>
-        <p>كل مهارة تتقنها تضيء فانوسًا في مسارك، والأهل يصلهم إشعار عند كل مرحلة تنجزها.</p>
-      </div>
-      <figure class="nb-dash" data-rv aria-label="لوحة التقدّم في نبراس">
-        <div class="nb-dash-row"><b>مستواك الحالي</b></div>
-        <div class="nb-meter" role="img" aria-label="80 بالمئة"><i style="width:80%"></i></div>
-        <div class="nb-dash-grid">
-          <div><small>مهارات أتقنتها</small><b>8 <span>/ 10</span></b></div>
-          <div><small>التحديات المكتملة</small><b>24</b></div>
-        </div>
-        <div class="nb-lanterns" aria-hidden="true">${Array.from({length:10},(_,i)=>L(i<8)).join("")}</div>
-      </figure>
-    </section>
-
-    <section class="nb-ok" aria-labelledby="nb-ok-h" data-rv>
-      <h2 id="nb-ok-h">اسأل براحتك، <span>نبراس معك خطوة بخطوة.</span></h2>
-      <p class="nb-ok-sub">نبراس مصمَّم للطالب الذي:</p>
-      <ul>
-        <li>فاتته مهارة من صف سابق</li>
-        <li>فهم الشرح لكنه لا يعرف كيف يحل</li>
-        <li>يحتاج تدريبًا إضافيًا</li>
-        <li>يحتاج أن يبدأ من نقطة مختلفة</li>
-      </ul>
-      <blockquote>المشكلة مش إنك ما بتعرف.<br>المشكلة إننا أحيانًا بنبدأ من المكان الغلط.</blockquote>
-    </section>
-
     <section class="nb-sec" aria-labelledby="ls-for">
       <div class="lsec-head" id="ls-for" data-rv><span class="kick">لمن نبراس؟</span></div>
       <div class="lgrid" data-rv>
         <div class="lcard"><span class="ico">${IC_KID}</span><h3>الطالب</h3><p>يلعب ويكتشف أين توقّف، ويضيء فوانيسه واحدًا تلو الآخر. يدخل باسم مستعار وشخصية كرتونية، دون اسمه الحقيقي.</p><a class="btn btn-go btn-sm" href="#auth-student">دخول الطلاب</a></div>
-        <div class="lcard"><span class="ico">${IC_PAR}</span><h3>وليّ الأمر</h3><p>يربط حساب ابنه أو ابنته برمز الربط، ويطّلع على تقرير التشخيص الأولي، ويصله إشعار عند كل مرحلة.</p><a class="btn btn-line btn-sm" href="#auth-parent">دخول الأهالي</a></div>
+        <div class="lcard"><span class="ico">${IC_PAR}</span><h3>وليّ الأمر</h3><p>يربط حساب ابنه أو ابنته برمز الربط، ويتابع تقرير التشخيص والفوانيس التي أضاءها، ويصله إشعار عند كل مرحلة.</p><a class="btn btn-line btn-sm" href="#auth-parent">دخول الأهالي</a></div>
         <div class="lcard"><span class="ico">${IC_TEACH}</span><h3>المعلّم</h3><p>مساعد للمعلّمة يفسّر سبب خطأ الطالبة ويقترح طريقة العلاج. هو أداة للمعلّمة، لا لتقييم الطالبة.</p><button class="btn btn-line btn-sm" type="button" data-guest>دخول المعلمين</button></div>
       </div>
     </section>
