@@ -3,6 +3,7 @@
    الفيديو مرسوم بالكود على canvas: ما في ملف فيديو، فهو خفيف على النت الضعيف.
    الاستعمال (من app.js):  NibrasIntro.mount(document.getElementById("intro"))
    الصوت بيتبع زر الأصوات بالموقع (localStorage: nibras.sound).
+   
    ===================================================================== */
 (function(){
 "use strict";
