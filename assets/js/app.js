@@ -465,7 +465,7 @@ function renderNav(){
   const tabs=u&&u.role==="student"?TABS:[];
   document.body.classList.toggle("has-tabs",tabs.length>0);
   if(!u&&route()==="home"){
-    $("#nav").innerHTML=[["ls-who","من هو نبراس؟"],["ls-for","لمن نبراس؟"],["ls-why","لماذا من المستوى؟"]].map(([id,l])=>`<a href="#home" data-sec="${id}">${l}</a>`).join("");
+    $("#nav").innerHTML=[["ls-who","من هو نبراس؟"],["ls-for","لمن نبراس؟"],["nb-plans-h","الاشتراكات"],["ls-why","لماذا من المستوى؟"]].map(([id,l])=>`<a href="#home" data-sec="${id}">${l}</a>`).join("");
     $("#nav").querySelectorAll("[data-sec]").forEach(a=>a.onclick=e=>{e.preventDefault();const t=document.getElementById(a.dataset.sec);if(t)t.closest("section").scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth",block:"start"});});
   } else $("#nav").innerHTML=tabs.filter(x=>x[0]!=="me").map(([id,l])=>`<a href="#${id}"${t===id?' aria-current="page"':""}>${l}</a>`).join("");
   $("#tabbar").style.gridTemplateColumns=`repeat(${tabs.length||1},1fr)`;
