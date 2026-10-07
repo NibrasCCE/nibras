@@ -565,10 +565,9 @@ function vLanding(){
       <div class="lsec-head" data-rv><span class="kick">من هو نبراس؟</span><h2 id="ls-who">رحلتك مع نبراس تبدأ من مكانك</h2></div>
       <div class="nb-steps" data-rv>
         <span class="line" aria-hidden="true"></span>
-        <article class="nb-step"><span class="num">01</span><span class="ic">${L(true)}</span><h3>اكتشف</h3><b>نبراس يفهم مستواك</b><p>لعبة قصيرة تساعد على تحديد المهارات التي تحتاج إلى تقوية.</p></article>
-        <article class="nb-step"><span class="num">02</span><span class="ic">${L(true)}</span><h3>افهم</h3><b>تعلّم من النقطة التي توقّفت عندها</b><p>شرح مبسّط ومثال من الحياة اليومية، مناسب لمستواك.</p></article>
-        <article class="nb-step"><span class="num">03</span><span class="ic">${L(true)}</span><h3>أتقن</h3><b>تدرّب حتى تثبت الفكرة</b><p>تمارين تفاعلية، والفانوس يضيء بعد ثلاث إجابات صحيحة متتالية.</p></article>
-      </div>
+        <article class="nb-step"><span class="num">01</span><span class="ic"><svg class="step-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" class="f"/><path d="M15.5 15.5L21 21"/><path d="M8 10.5h5M10.5 8v5"/></svg></span><h3>اكتشف</h3><b>نبراس يفهم مستواك</b><p>لعبة قصيرة تساعد على تحديد المهارات التي تحتاج إلى تقوية.</p></article>
+        <article class="nb-step"><span class="num">02</span><span class="ic"><svg class="step-ic" viewBox="0 0 24 24" aria-hidden="true"><path class="f" d="M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/><path d="M9.5 19h5M10.5 21.5h3"/></svg></span><h3>افهم</h3><b>تعلّم من النقطة التي توقّفت عندها</b><p>شرح مبسّط ومثال من الحياة اليومية، مناسب لمستواك.</p></article>
+        <article class="nb-step"><span class="num">03</span><span class="ic"><svg class="step-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9.5" r="6.5" class="f"/><path d="M12 6.4l1 2 2.2.3-1.6 1.5.4 2.2-2-1-2 1 .4-2.2-1.6-1.5 2.2-.3z"/><path d="M8.5 15l-1.5 6.5 5-2.5 5 2.5-1.5-6.5"/></svg></span><h3>أتقن</h3><b>تدرّب حتى تثبت الفكرة</b><p>تمارين تفاعلية، والفانوس يضيء بعد ثلاث إجابات صحيحة متتالية.</p></article>      </div>
     </section>
 
     <section class="nb-sec" aria-labelledby="nb-ai-h">
