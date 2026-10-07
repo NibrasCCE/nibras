@@ -620,7 +620,7 @@ function vLanding(){
     </section>
 
     <section class="nb-sec" aria-labelledby="ls-for">
-      <div class="lsec-head" data-rv><span class="kick">لمن نبراس؟</span><h2 id="ls-for">حساب للطالب، وحساب لوليّ الأمر، ومساعد للمعلّم</h2></div>
+      <div class="lsec-head" id="ls-for" data-rv><span class="kick">لمن نبراس؟</span></div>
       <div class="lgrid" data-rv>
         <div class="lcard"><span class="ico">${IC_KID}</span><h3>الطالب</h3><p>يلعب ويكتشف أين توقّف، ويضيء فوانيسه واحدًا تلو الآخر. يدخل باسم مستعار وشخصية كرتونية، دون اسمه الحقيقي.</p><a class="btn btn-go btn-sm" href="#auth-student">دخول الطلاب</a></div>
         <div class="lcard"><span class="ico">${IC_PAR}</span><h3>وليّ الأمر</h3><p>يربط حساب ابنه أو ابنته برمز الربط، ويطّلع على تقرير التشخيص الأولي، ويصله إشعار عند كل مرحلة.</p><a class="btn btn-line btn-sm" href="#auth-parent">دخول الأهالي</a></div>
