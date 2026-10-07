@@ -711,6 +711,8 @@ body.wide .top{background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-
 .nb-step .num{font-family:var(--f-num);font-weight:900;font-size:.85rem;color:var(--ink-3);letter-spacing:.08em}
 .nb-step .ic{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;background:var(--bg);border:2px solid var(--glow);position:relative;z-index:1}
 .nb-step .ic .ln{width:28px;height:36px}
+.nb-step .ic .step-ic{width:30px;height:30px;fill:none;stroke:var(--logo);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.nb-step .ic .step-ic .f{fill:var(--glow);stroke:var(--lamp)}.nb-step .ic .ln{width:28px;height:36px}
 .nb-step h3{font-size:1.35rem;color:var(--logo)}
 .nb-step b{color:var(--ink);font-size:1rem}
 .nb-step p{color:var(--ink-2);font-size:.95rem}
