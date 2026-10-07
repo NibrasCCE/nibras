@@ -464,7 +464,10 @@ function renderNav(){
   const u=ME(),t=tabOf(route());
   const tabs=u&&u.role==="student"?TABS:[];
   document.body.classList.toggle("has-tabs",tabs.length>0);
-  $("#nav").innerHTML=tabs.filter(x=>x[0]!=="me").map(([id,l])=>`<a href="#${id}"${t===id?' aria-current="page"':""}>${l}</a>`).join("");
+  if(!u&&route()==="home"){
+    $("#nav").innerHTML=[["ls-who","من هو نبراس؟"],["ls-for","لمن نبراس؟"],["ls-why","لماذا من المستوى؟"]].map(([id,l])=>`<a href="#home" data-sec="${id}">${l}</a>`).join("");
+    $("#nav").querySelectorAll("[data-sec]").forEach(a=>a.onclick=e=>{e.preventDefault();const t=document.getElementById(a.dataset.sec);if(t)t.closest("section").scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth",block:"start"});});
+  } else $("#nav").innerHTML=tabs.filter(x=>x[0]!=="me").map(([id,l])=>`<a href="#${id}"${t===id?' aria-current="page"':""}>${l}</a>`).join("");
   $("#tabbar").style.gridTemplateColumns=`repeat(${tabs.length||1},1fr)`;
   $("#tabbar").innerHTML=tabs.map(([id,l,ic])=>`<a href="#${id}"${t===id?' aria-current="page"':""}><span class="ic">${TAB_IC[ic]}</span><span>${l}</span></a>`).join("");
   const me=$("#me");
@@ -476,6 +479,7 @@ function renderNav(){
 async function logout(){if(CHAT.ctl)CHAT.ctl.abort();if(isGuest()&&typeof Store.endGuest==="function")await Store.endGuest();else await Store.logout();S=null;GUEST_S=null;G=null;P=null;PV.kids=null;PV.err="";CHAT.err="";REP.fail=null;location.hash="#home";render();toast("سجّلت خروج");}
 function render(){
   if(!READY)return;
+  document.body.classList.remove("wide");
   bindSession();renderNav();
   const u=ME(),r=route();
   if(!u){if(r==="auth-student")return vAuth("student");if(r==="auth-parent")return vAuth("parent");return vLanding();}
@@ -491,26 +495,195 @@ const IC_KID='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-
 const IC_PAR='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="7" r="3"/><circle cx="17" cy="9" r="2.3"/><path d="M2.5 20c.6-3.4 2.7-5.5 5.5-5.5s4.9 2.1 5.5 5.5M14 20c.4-2.6 1.6-4.2 3.2-4.2s2.9 1.6 3.3 4.2"/></svg>';
 const IC_INFO='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/></svg>';
 const IC_TEACH='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M7 8.5h7M7 11.5h4M12 16v4M8 20h8"/></svg>';
+/* ---------- landing (home page) ----------
+   the story while scrolling: a student stuck on a lesson → Nibras finds the gap → picks the start → learn → practise → progress */
+const NB_GAMES=[
+  {n:"فرقعة الفقاعات",d:"اختر الفقاعة الصحيحة قبل ما تطير.",svg:'<circle class="g-surf" cx="30" cy="40" r="17"/><circle class="g-fill" cx="62" cy="30" r="20"/><circle class="g-surf" cx="94" cy="44" r="14"/><circle class="g-soft" cx="56" cy="23" r="4"/>'},
+  {n:"ضفدع خط الأعداد",d:"اقفز على خط الأعداد وشوف وين بتوقف.",svg:'<path class="g-line" d="M8 54h104" stroke-width="3"/><path class="g-line" d="M20 49v10M40 49v10M60 49v10M80 49v10M100 49v10" stroke-width="2"/><path class="g-dash" d="M30 46C40 12 74 12 86 46" stroke-width="2.5"/><circle class="g-fill" cx="86" cy="42" r="7"/>'},
+  {n:"ميزان المعادلة",d:"وازن الطرفين حتى تلاقي قيمة المجهول.",svg:'<path class="g-line" d="M20 30h80" stroke-width="4"/><path class="g-soft2" d="M60 30l-12 32h24z"/><path class="g-fill" d="M10 44h28a14 8 0 0 1-28 0zM82 44h28a14 8 0 0 1-28 0z"/><path class="g-line" d="M24 30v14M96 30v14" stroke-width="2"/>'},
+  {n:"تلوين الشريط",d:"لوّن أجزاء الشريط لتمثّل الكسر أو النسبة.",svg:'<rect class="g-surf" x="12" y="24" width="96" height="26" rx="6"/><rect class="g-fill" x="12" y="24" width="72" height="26" rx="6"/><path class="g-line" d="M36 24v26M60 24v26M84 24v26" stroke-width="2"/>'},
+  {n:"ترتيب البطاقات",d:"رتّب الأعداد من الأصغر إلى الأكبر.",svg:'<rect class="g-surf" x="84" y="36" width="24" height="26" rx="5"/><rect class="g-surf" x="48" y="24" width="24" height="38" rx="5"/><rect class="g-fill" x="12" y="12" width="24" height="50" rx="5"/>'},
+  {n:"لوحة الرموز",d:"اكتب جوابك بلوحة فيها كسور وأسس ورموز.",svg:'<rect class="g-surf" x="14" y="14" width="26" height="20" rx="5"/><rect class="g-surf" x="47" y="14" width="26" height="20" rx="5"/><rect class="g-fill" x="80" y="14" width="26" height="20" rx="5"/><rect class="g-surf" x="14" y="40" width="26" height="20" rx="5"/><rect class="g-surf" x="47" y="40" width="26" height="20" rx="5"/><rect class="g-surf" x="80" y="40" width="26" height="20" rx="5"/>'}
+];
+const NB_BULB='<svg class="nb-bulb" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="22" r="20" fill="var(--glow)" opacity=".28"/><circle cx="24" cy="22" r="11" fill="var(--lamp)"/><circle cx="20" cy="18" r="3.2" fill="#FFF3D1"/><rect x="18" y="35" width="12" height="5" rx="2" fill="var(--logo)"/></svg>';
 function vLanding(){
-  app.innerHTML=`<section class="view">
-    <div class="hero">
-      ${LOGO}
-      <p class="tag">نبراس · تعلّم من مستواك</p>
-      <p class="lead">لعبة قصيرة بتكشف من وين لازم يبلّش طالب الصف السابع بالرياضيات، حتى لو الفجوة من الخامس أو السادس. بعدها مسار إله لحاله، ونبراس جنبه يساعده يفكّر، والأهل بيتابعوا التقدّم.</p>
-      <div class="roles">
-        <a class="rolebtn primary" href="#auth-student">${IC_KID}<b>دخول الطلاب</b><span>العب واكتشف مستواك</span></a>
-        <a class="rolebtn" href="#auth-parent">${IC_PAR}<b>دخول الأهالي</b><span>تابع تقارير ابنك أو بنتك</span></a>
-        <button class="rolebtn" id="guest-teacher" type="button" style="grid-column:1/-1;font:inherit;cursor:pointer">${IC_TEACH}<b>دخول المعلمين (زائر)</b><span>مساعد للمعلمة: سبب خطأ الطالبة وطريقة علاجه، بدون حساب</span></button>
+  document.body.classList.add("wide");
+  const L=(on,cls)=>LANTERN((on?"on":"off")+(cls?" "+cls:""));
+  app.innerHTML=`<section class="view nb-home">
+
+    <header class="nb-hero" aria-labelledby="nb-h1">
+      <svg class="nb-path" viewBox="0 0 1200 520" preserveAspectRatio="none" aria-hidden="true"><path d="M1180 60 C 960 40, 900 300, 700 260 S 360 420, 40 470"/></svg>
+      <div class="nb-hero-text">
+        <p class="nb-kicker">${NB_BULB}<span>نبراس · تعلّم من مستواك</span></p>
+        <h1 id="nb-h1">مش فاهم درس؟<br><span class="hl">خلّينا نرجع خطوة… ونكمّل مع بعض.</span></h1>
+        <p class="nb-lead">نبراس منصة ذكية تساعدك تكتشف الفجوة اللي وقفت عندها في الرياضيات، وتبني طريقك من مستواك أنت.</p>
+        <div class="nb-cta">
+          <a class="btn btn-go" href="#auth-student">ابدأ رحلة التعلّم</a>
+          <button class="btn btn-line" type="button" id="nb-watch"><svg viewBox="0 0 24 24" aria-hidden="true" width="18" height="18"><path d="M7 4v16l13-8z" fill="currentColor"/></svg>شاهد كيف يعمل نبراس</button>
+        </div>
+        <div class="nb-login">
+          <span class="nb-login-l">الدخول</span>
+          <nav class="rolei-row" aria-label="الدخول">
+            <a class="rolei primary" href="#auth-student" aria-label="دخول الطلاب">${IC_KID}<span class="tip">دخول الطلاب</span></a>
+            <a class="rolei" href="#auth-parent" aria-label="دخول الأهالي">${IC_PAR}<span class="tip">دخول الأهالي</span></a>
+            <button class="rolei" id="guest-teacher" type="button" aria-label="دخول المعلمين (زائر)">${IC_TEACH}<span class="tip">دخول المعلمين</span></button>
+          </nav>
+        </div>
       </div>
-    </div>
-    <div class="steps">
-      <div class="step"><span class="n">1</span><div><h3>العب واكتشف مستواك</h3><p>ألغاز بشكل ألعاب على 3 جزر: الخامس والسادس والسابع.</p></div></div>
-      <div class="step"><span class="n">2</span><div><h3>امشِ بمسارك</h3><p>بتبلّش من أول مهارة ناقصة، وكل مهارة بتتقنها بتضوّي فانوس.</p></div></div>
-      <div class="step"><span class="n">3</span><div><h3>الأهل بيتابعوا</h3><p>تقرير التشخيص الأولي وإشعار عند كل مرحلة بتنجزها.</p></div></div>
-    </div>
-    <p class="draft">نموذج أولي · مهارات الأعداد والجبر من كتب الرياضيات للصفوف 5–7 (المنهاج الفلسطيني) · المحتوى مسودة بانتظار مراجعة معلم${Store.mode==="local"?" · وضع تجريبي محلي: الحسابات محفوظة على هذا الجهاز فقط":""}</p>
+      <div class="nb-video">
+        <p class="nb-video-l"><i></i>شاهد نبراس في 46 ثانية</p>
+        <div class="intro" id="intro"></div>
+      </div>
+    </header>
+
+    <section class="nb-late" aria-labelledby="nb-late-h" data-rv>
+      <div class="nb-symbols" aria-hidden="true"><span>÷</span><span>×</span><span>%</span><span>=</span><span>√</span><span>س</span><span>+</span><span>½</span></div>
+      <div class="nb-late-lamp" aria-hidden="true">${L(true)}</div>
+      <h2 id="nb-late-h">أنت مش متأخر.<br><span>أنت بس عندك محطة ناقصة.</span></h2>
+      <p>أحيانًا ما تكون المشكلة في الدرس الحالي، بل في مهارة سابقة لم تكتمل بعد.</p>
+    </section>
+
+    <section class="nb-sec nb-split" aria-labelledby="nb-start-h">
+      <div class="nb-split-text" data-rv>
+        <span class="kick">مسار لكل طالب</span>
+        <h2 id="nb-start-h">كل طالب يبدأ من مكان مختلف.</h2>
+        <p>نبراس لا يفترض أن جميع طلاب الصف السابع في المستوى نفسه. لعبة التشخيص تمرّ على مهارات الصف الخامس والسادس والسابع، وتحدّد أول مهارة ناقصة عند كل طالب.</p>
+        <p class="nb-strong">نبراس يحدّد من أين تبدأ.</p>
+      </div>
+      <figure class="nb-mock" data-rv aria-label="مسار طالبة في نبراس">
+        <div class="nb-mock-top"><span class="nb-av">س</span><div><b>سارة</b><small>الصف السابع</small></div></div>
+        <ol class="nb-skills">
+          <li class="done"><span class="st" aria-hidden="true">✓</span><span>ضرب الكسور وقسمتها</span><small>الصف الخامس</small></li>
+          <li class="done"><span class="st" aria-hidden="true">✓</span><span>النسبة والنسبة المئوية</span><small>الصف السادس</small></li>
+          <li class="now"><span class="st" aria-hidden="true"></span><span>المتغير والمقدار الجبري</span><small>ابدئي من هنا</small></li>
+          <li class="lock"><span class="st" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><span>المعادلة الخطية</span><small>بعد المحطة الحالية</small></li>
+        </ol>
+      </figure>
+    </section>
+
+    <section class="nb-sec" id="ls-who-sec" aria-labelledby="ls-who">
+      <div class="lsec-head" data-rv><span class="kick">من هو نبراس؟</span><h2 id="ls-who">رحلتك مع نبراس تبدأ من مكانك</h2></div>
+      <div class="nb-steps" data-rv>
+        <span class="line" aria-hidden="true"></span>
+        <article class="nb-step"><span class="num">01</span><span class="ic">${L(true)}</span><h3>اكتشف</h3><b>نبراس يفهم مستواك</b><p>لعبة قصيرة تساعد على تحديد المهارات التي تحتاج إلى تقوية.</p></article>
+        <article class="nb-step"><span class="num">02</span><span class="ic">${L(true)}</span><h3>افهم</h3><b>تعلّم من النقطة التي توقّفت عندها</b><p>شرح مبسّط ومثال من الحياة اليومية، مناسب لمستواك.</p></article>
+        <article class="nb-step"><span class="num">03</span><span class="ic">${L(true)}</span><h3>أتقن</h3><b>تدرّب حتى تثبت الفكرة</b><p>تمارين تفاعلية، والفانوس يضيء بعد ثلاث إجابات صحيحة متتالية.</p></article>
+      </div>
+    </section>
+
+    <section class="nb-sec" aria-labelledby="nb-ai-h">
+      <div class="lsec-head" data-rv><span class="kick">الذكاء الاصطناعي في نبراس</span><h2 id="nb-ai-h">ذكاء يساعدك تبدأ من المكان الصح</h2><p>كل إجابة منك تساعد نبراس يفهم احتياجك بشكل أفضل.</p></div>
+      <ol class="nb-flow" data-rv>
+        <li><span class="dot">1</span><b>إجابتك</b><small>تحلّ لغزًا أو تمرينًا</small></li>
+        <li><span class="dot">2</span><b>تحليل أدائك</b><small>صح أو خطأ، ولماذا</small></li>
+        <li><span class="dot">3</span><b>اكتشاف المهارة</b><small>الفكرة التي تحتاج تقوية</small></li>
+        <li><span class="dot">4</span><b>اختيار النشاط</b><small>شرح أو تمرين يناسبك</small></li>
+        <li><span class="dot">5</span><b>تحديث مسارك</b><small>محطتك التالية</small></li>
+      </ol>
+    </section>
+
+    <section class="nb-sec" aria-labelledby="nb-games-h">
+      <div class="lsec-head" data-rv><span class="kick">ستة أنواع من الألعاب</span><h2 id="nb-games-h">التعلّم مش لازم يكون ممل.</h2><p>تعلّم، جرّب، وتحدّى نفسك.</p></div>
+      <div class="nb-games" id="nb-games">
+        ${NB_GAMES.map((g,i)=>`<article class="nb-game"${i>2?" hidden":""}><svg viewBox="0 0 120 72" aria-hidden="true">${g.svg}</svg><h3>${g.n}</h3><p>${g.d}</p><a class="nb-game-cta" href="#auth-student">جرّبها في رحلة الفوانيس</a></article>`).join("")}
+      </div>
+      <div class="nb-more"><button class="btn btn-line btn-sm" type="button" id="nb-more" aria-expanded="false" aria-controls="nb-games">اعرض الألعاب الثلاث الباقية</button></div>
+    </section>
+
+    <section class="nb-sec nb-split rev" aria-labelledby="nb-prog-h">
+      <div class="nb-split-text" data-rv>
+        <span class="kick">التقدّم</span>
+        <h2 id="nb-prog-h">وشوف قديش تقدّمت.</h2>
+        <p>كل مهارة تتقنها تضيء فانوسًا في مسارك، والأهل يصلهم إشعار عند كل مرحلة تنجزها.</p>
+      </div>
+      <figure class="nb-dash" data-rv aria-label="لوحة التقدّم في نبراس">
+        <div class="nb-dash-row"><b>مستواك الحالي</b></div>
+        <div class="nb-meter" role="img" aria-label="80 بالمئة"><i style="width:80%"></i></div>
+        <div class="nb-dash-grid">
+          <div><small>مهارات أتقنتها</small><b>8 <span>/ 10</span></b></div>
+          <div><small>التحديات المكتملة</small><b>24</b></div>
+        </div>
+        <div class="nb-lanterns" aria-hidden="true">${Array.from({length:10},(_,i)=>L(i<8)).join("")}</div>
+      </figure>
+    </section>
+
+    <section class="nb-ok" aria-labelledby="nb-ok-h" data-rv>
+      <h2 id="nb-ok-h">مش عيب تقول: <span>«مش فاهم».</span></h2>
+      <p class="nb-ok-sub">نبراس مصمَّم للطالب الذي:</p>
+      <ul>
+        <li>فاتته مهارة من صف سابق</li>
+        <li>فهم الشرح لكنه لا يعرف كيف يحل</li>
+        <li>يحتاج تدريبًا إضافيًا</li>
+        <li>يحتاج أن يبدأ من نقطة مختلفة</li>
+      </ul>
+      <blockquote>المشكلة مش إنك ما بتعرف.<br>المشكلة إننا أحيانًا بنبدأ من المكان الغلط.</blockquote>
+    </section>
+
+    <section class="nb-sec" aria-labelledby="ls-for">
+      <div class="lsec-head" data-rv><span class="kick">لمن نبراس؟</span><h2 id="ls-for">حساب للطالب، وحساب لوليّ الأمر، ومساعد للمعلّم</h2></div>
+      <div class="lgrid" data-rv>
+        <div class="lcard"><span class="ico">${IC_KID}</span><h3>الطالب</h3><p>يلعب ويكتشف أين توقّف، ويضيء فوانيسه واحدًا تلو الآخر. يدخل باسم مستعار وشخصية كرتونية، دون اسمه الحقيقي.</p><a class="btn btn-go btn-sm" href="#auth-student">دخول الطلاب</a></div>
+        <div class="lcard"><span class="ico">${IC_PAR}</span><h3>وليّ الأمر</h3><p>يربط حساب ابنه أو ابنته برمز الربط، ويطّلع على تقرير التشخيص الأولي، ويصله إشعار عند كل مرحلة.</p><a class="btn btn-line btn-sm" href="#auth-parent">دخول الأهالي</a></div>
+        <div class="lcard"><span class="ico">${IC_TEACH}</span><h3>المعلّم</h3><p>مساعد للمعلّمة يفسّر سبب خطأ الطالبة ويقترح طريقة العلاج. هو أداة للمعلّمة، لا لتقييم الطالبة.</p><button class="btn btn-line btn-sm" type="button" data-guest>دخول المعلمين</button></div>
+      </div>
+    </section>
+
+    <section class="nb-sec" id="nb-plans" aria-labelledby="nb-plans-h">
+      <div class="lsec-head" data-rv><span class="kick">الاشتراكات</span><h2 id="nb-plans-h">اشتراك بسيط وواضح لكل طالب</h2><p>اشتراك شهري لكل طالب، يدفعه وليّ الأمر.</p></div>
+      <div class="nb-plans" data-rv>
+        <article class="nb-plan main">
+          <span class="nb-plan-badge">لأولياء الأمور</span>
+          <h3>اشتراك الطالب</h3>
+          <p class="nb-price"><b>21</b><span>₪</span><small>شهريًا لكل طالب<br>(حوالي 6.89 دولار)</small></p>
+          <ul>
+            <li>رحلة التشخيص كاملة على الجزر الثلاث</li>
+            <li>مسار التعلّم بالمهارات العشر، من الصف الخامس إلى السابع</li>
+            <li>«اسأل نبراس» حتى ${DAILY_LIMIT} رسالة يوميًا</li>
+            <li>صفحة الأهالي مع تقرير التشخيص وإشعار عند كل مرحلة</li>
+          </ul>
+          <a class="btn btn-go" href="#auth-parent">أنشئ حساب وليّ أمر</a>
+        </article>
+        <article class="nb-plan">
+          <span class="nb-plan-badge alt">للمدارس والمديريات</span>
+          <h3>اشتراك المدرسة</h3>
+          <p class="nb-price ask"><b>بالاتفاق</b><small>يُحدَّد السعر بعد الحديث مع المدرسة أو المديرية</small></p>
+          <ul>
+            <li>حسابات لطلبة الصف السابع في المدرسة</li>
+            <li>مساعد المعلّم لفهم سبب خطأ الطالب وطريقة العلاج</li>
+          </ul>
+          <button class="btn btn-line" type="button" data-guest>جرّب مساعد المعلّم</button>
+        </article>
+      </div>
+    </section>
+    <section class="nb-sec" aria-labelledby="ls-why">
+      <div class="lsec-head" data-rv><span class="kick">لماذا من المستوى؟</span><h2 id="ls-why">قائم على منهجية «التعليم حسب المستوى الفعلي»</h2></div>
+      <div class="lwhy" data-rv>
+        <p>طوّرت منظمة براثام (<bdi dir="ltr">Pratham</bdi>) في الهند منهجية <bdi dir="ltr">Teaching at the Right Level (TaRL)</bdi>، وفكرتها أن يتعلّم الطلاب حسب مستواهم الحقيقي، لا حسب منهاج صفّهم.</p>
+        <p>قيّم مختبر <bdi dir="ltr">J-PAL</bdi> هذه المنهجية بتقييمات عشوائية في أكثر من سياق، ووصلت في زامبيا إلى معظم مدارس الدولة بحلول عام 2019 بالشراكة مع وزارة التربية.</p>
+        <p>يطبّق نبراس الفكرة نفسها على طلبة الصف السابع في الرياضيات: تشخيص فردي، ومكتبة أخطاء مفاهيمية تشرح سبب خطأ الطالب، ومسار يبدأ من أول مهارة ناقصة.</p>
+      </div>
+    </section>
+
+    <section class="nb-final" aria-labelledby="nb-final-h">
+      <div class="nb-final-lamp" aria-hidden="true">${NB_BULB}</div>
+      <h2 id="nb-final-h">مستعد تبدأ رحلتك؟</h2>
+      <p>رحلتك في الرياضيات ما لازم تبدأ من أول الكتاب.<br>ابدأ من المكان اللي تحتاجه أنت.</p>
+      <a class="btn btn-go" href="#auth-student">ابدأ رحلتك مع نبراس</a>
+      <p class="nb-final-tags">بسيط · ذكي · مصمّم لمستواك</p>
+    </section>
+
   </section>`;
   const gb=$("#guest-teacher");if(gb)gb.onclick=guestTeacher;
+  app.querySelectorAll("[data-guest]").forEach(x=>x.onclick=guestTeacher);
+  if(window.NibrasIntro)NibrasIntro.mount($("#intro"));
+  const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  $("#nb-watch").onclick=()=>{const v=$(".nb-video");if(v)v.scrollIntoView({behavior:reduce?"auto":"smooth",block:"center"});const p=$("#intro .intro-play");if(p&&!p.hidden)p.click();};
+  $("#nb-more").onclick=e=>{const b=e.currentTarget,open=b.getAttribute("aria-expanded")==="true";app.querySelectorAll(".nb-game").forEach((g,i)=>{if(i>2)g.hidden=open;});b.setAttribute("aria-expanded",String(!open));b.textContent=open?"اعرض الألعاب الثلاث الباقية":"اعرض أقل";};
+  const els=app.querySelectorAll("[data-rv]");
+  if(!reduce&&"IntersectionObserver" in window){
+    const io=new IntersectionObserver(es=>es.forEach(en=>{if(en.isIntersecting){en.target.classList.remove("rv-wait");en.target.classList.add("rv-in");io.unobserve(en.target);}}),{threshold:.12,rootMargin:"0px 0px -40px 0px"});
+    els.forEach(el=>{if(el.getBoundingClientRect().top>innerHeight){el.classList.add("rv-wait");io.observe(el);}else el.classList.add("rv-in");});
+  }else els.forEach(el=>el.classList.add("rv-in"));
 }
 /* guest teacher: one click, no account form. Opens the chat only. */
 let GUEST_BUSY=false;
