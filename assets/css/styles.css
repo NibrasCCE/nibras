@@ -647,6 +647,8 @@ body.wide .top{background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-
 .nb-login{display:flex;align-items:center;gap:16px;padding-top:6px}
 .nb-login-l{font-size:.85rem;font-weight:800;color:var(--ink-3)}
 .nb-login .rolei-row{padding-bottom:22px;gap:12px;justify-content:flex-start}
+@media (hover:none){.nb-login .rolei-row{gap:40px;padding-bottom:30px}.nb-login .rolei .tip{font-size:.75rem}}
+@media (max-width:420px){.nb-login{flex-direction:column;gap:8px}}
 .nb-login .rolei{width:52px;height:52px}
 .nb-login .rolei svg{width:26px;height:26px}
 .nb-video{display:grid;gap:12px;min-width:0}
