@@ -572,8 +572,7 @@ function vLanding(){
     </section>
 
     <section class="nb-sec" aria-labelledby="nb-ai-h">
-      <div class="lsec-head" data-rv><span class="kick">الذكاء الاصطناعي في نبراس</span><h2 id="nb-ai-h">ذكاء يساعدك تبدأ من المكان الصح</h2><p>كل إجابة منك تساعد نبراس يفهم احتياجك بشكل أفضل.</p></div>
-      <ol class="nb-flow" data-rv>
+      <div class="lsec-head" data-rv><span class="kick">الذكاء الاصطناعي في نبراس</span><h2 id="nb-ai-h">نبراس بيفهم ليش غلطت، مش بس إنك غلطت</h2><p>نبراس بيستخدم الذكاء الاصطناعي ليقرأ جوابك، ويكتشف الفكرة اللي محتاجة تقوية، ويختارلك الشرح أو التمرين المناسب.</p></div>      <ol class="nb-flow" data-rv>
         <li><span class="dot">1</span><b>إجابتك</b><small>تحلّ لغزًا أو تمرينًا</small></li>
         <li><span class="dot">2</span><b>تحليل أدائك</b><small>صح أو خطأ، ولماذا</small></li>
         <li><span class="dot">3</span><b>اكتشاف المهارة</b><small>الفكرة التي تحتاج تقوية</small></li>
