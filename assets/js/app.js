@@ -608,7 +608,7 @@ function vLanding(){
     </section>
 
     <section class="nb-ok" aria-labelledby="nb-ok-h" data-rv>
-      <h2 id="nb-ok-h">مش عيب تقول: <span>«مش فاهم».</span></h2>
+      <h2 id="nb-ok-h">اسأل براحتك، <span>نبراس معك خطوة بخطوة.</span></h2>
       <p class="nb-ok-sub">نبراس مصمَّم للطالب الذي:</p>
       <ul>
         <li>فاتته مهارة من صف سابق</li>
