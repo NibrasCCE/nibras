@@ -956,17 +956,21 @@ function tiltFor(q,val){
    Right = «mastered»; wrong or «مش عارف» = «gap». A grade 1–2 skill that was not asked counts as «assumed» when a
    grade-3 skill built on it was right (not through a skill that was wrong); otherwise it stays «untested» and is in the path. */
 const DIAG_PLAN=SKILLS.filter(s=>LV[s.lv].g>=3).map(s=>s.id);
+/* grades 5 and 6: two questions per skill, each on a different topic of the skill.
+   Both right = «mastered», one right = «partial» (needs strengthening), none = «gap». */
+const DIAG_TWO={s5a:["q5a1","q5a2"],s5b:["q5b4","q5b5"],s5c:["q5c2","q5c3"],s6a:["q6a5","q6a1"],s6b:["q6b2","q6b3"],s6c:["q6c2","q6c3"]};
+const DIAG_ITEMS=DIAG_PLAN.flatMap(sid=>(DIAG_TWO[sid]||[DIAG_PICK[sid][0]]).map(qid=>({sid,qid})));
 let G=null;
 function setQ(id){G.q=qById[id];G.w=null;}
 function startGame(){
-  G={plan:DIAG_PLAN.slice(),i:-1,res:{},asked:[],pending:[],trail:[],inter:null,lv:null,prev:null,grade:gradeOf(S)};
+  G={items:DIAG_ITEMS.slice(),i:-1,res:{},qres:{},asked:[],pending:[],trail:[],inter:null,lv:null,prev:null,grade:gradeOf(S)};
   goNext(true);
   if(window.claude&&claude.use)claude.use("permissions").then(p=>p&&p.request(["sample"])).catch(()=>{});
 }
 function goNext(first){
-  G.i++;const sid=G.plan[G.i];if(!sid)return endGame();
-  const lv=skillById[sid].lv,prev=G.lv;
-  setQ(DIAG_PICK[sid][0]);
+  G.i++;const it=G.items[G.i];if(!it)return endGame();
+  const sid=it.sid,lv=skillById[sid].lv,prev=G.lv;
+  setQ(it.qid);
   /* the first island covers grades 1–3 */
   if(first)LEVELS.filter(l=>l.g<LV[lv].g).forEach(l=>G.trail.push(l.id));
   if(!G.trail.includes(lv))G.trail.push(lv);
@@ -988,7 +992,7 @@ function record(val,skipped){
   G.asked.push(entry);
   if(!r.ok&&r.mis&&r.src==="match")bump(r.mis);
   if(!r.ok&&r.src==="ai"){if(sampleFn)G.pending.push(aiDiagnose(entry,q));else entry.src="none";}
-  G.res[q.skill]=r.ok?"mastered":"gap";
+  (G.qres[q.skill]=G.qres[q.skill]||[]).push(r.ok);
   return goNext();
 }
 function islandsHTML(){
@@ -1033,15 +1037,15 @@ function drawGame(){
 }
 function vPlay(){
   if(G)return drawGame();
-  const n=DIAG_PLAN.length,low=DIAG_PLAN.filter(id=>LV[skillById[id].lv].g<=3).length,mid=DIAG_PLAN.filter(id=>{const g=LV[skillById[id].lv].g;return g>=4&&g<=6;}).length;
+  const n=DIAG_ITEMS.length,gOf=it=>LV[skillById[it.sid].lv].g,low=DIAG_ITEMS.filter(it=>gOf(it)<=3).length,mid=DIAG_ITEMS.filter(it=>gOf(it)>=4&&gOf(it)<=6).length;
   app.innerHTML=`<section class="game"><div class="card" style="display:grid;gap:14px">
     <p class="eyebrow">أهلاً ${esc(ME().nick)}</p>
     <h2>رحلة الفوانيس</h2>
-    <p class="muted">رحلتك بتطلع من جزيرة الأول لجزيرة السابع: ${arNum(low)} ألغاز من الصفوف الأولى، و${arNum(mid)} ألغاز من الرابع للسادس، و${arNum(n-low-mid)} ألغاز من السابع. ومن أجوبتك بنعرف الفجوات وبنبني مسارك.</p>
+    <p class="muted">رحلتك بتطلع من جزيرة الأول لجزيرة السابع: ${arNum(low)} ألغاز من الصفوف الأولى، و${arNum(mid)} ${mid>2&&mid<11?"ألغاز":"لغز"} من الرابع للسادس، و${arNum(n-low-mid)} ألغاز من السابع. ومن أجوبتك بنعرف الفجوات وبنبني مسارك.</p>
     ${islandsHTML()}
     <div class="row" style="justify-content:center;gap:8px">${Object.keys(TYPE_NAME).map(t=>`<span class="chip calm"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${TYPE_IC[t]}</svg>${TYPE_NAME[t]}</span>`).join("")}</div>
     <ul class="muted small" style="margin:0;padding-inline-start:1.2em">
-      <li>${arNum(n)} لغز، لغز واحد لكل مهارة.</li>
+      <li>${arNum(n)} لغز: لغز لكل مهارة، ولغزين لكل مهارة من الخامس والسادس لأنها فيها مواضيع أكثر.</li>
       <li>ما في وقت ولا علامات. إذا ما بتعرف الجواب اكبس «مش عارف»، ورح نتعلّمها سوا بالمسار.</li>
       <li>نبراس (ذكاء اصطناعي) بيحلل أجوبتك الغلط عشان يعرف <b>ليش</b> صارت، وبيكتبلك تقرير بالآخر.</li>
     </ul>
@@ -1055,6 +1059,7 @@ async function endGame(){
     app.innerHTML=`<section class="game"><div class="card interlude">${LANTERN("big on")}<h2>نبراس بيقرأ إجاباتك…</h2><p class="muted">ثواني وبيطلعلك مسارك.</p></div></section>`;
     await Promise.allSettled(g.pending);
   }
+  Object.entries(g.qres).forEach(([sid,a])=>{const k=a.filter(Boolean).length;g.res[sid]=k===a.length?"mastered":k?"partial":"gap";});
   const skills={},ok=vouched(g.res);
   for(const s of pathOf(S))skills[s.id]=g.res[s.id]||(ok.has(s.id)?"assumed":"untested");
   const mis={};g.asked.forEach(a=>{if(!a.ok&&a.mis)mis[a.mis]=(mis[a.mis]||0)+1;});
@@ -1156,7 +1161,7 @@ function vResult(){
           <p class="tiny">${a.mis?`الخطأ المفاهيمي: <b>${esc(misById[a.mis].title)}</b> (${a.mis}) · `:""}الطريقة: ${SRC[a.src]||a.src}${a.why?` · ${mathify(a.why)}`:""}</p>
         </div>`;}).join("")}</div></details>`:""}
     </div>
-    <p class="draft">النتيجة تقدير أولي من ${d.count} ألغاز. الصح والغلط بيتحدد بالحساب، والذكاء الاصطناعي بيقترح سبب الغلط وممكن يخطئ. المهارات «المفهومة من جوابك» ما انسألت عنها، لأنك جاوبت صح على مهارة مبنية عليها.</p>
+    <p class="draft">النتيجة تقدير أولي من ${arNum(d.count)} ${d.count>2&&d.count<11?"ألغاز":"لغز"}. الصح والغلط بيتحدد بالحساب، والذكاء الاصطناعي بيقترح سبب الغلط وممكن يخطئ. المهارات «المفهومة من جوابك» ما انسألت عنها، لأنك جاوبت صح على مهارة مبنية عليها.</p>
   </section>`;
   const rr=$("#retryrep");if(rr)rr.onclick=()=>{REP.fail=null;vResult();};
   if(!d.report&&!REP.busy&&!REP.fail&&d.answers&&sampleFn)genReport(d,start);
@@ -1512,7 +1517,7 @@ function kidCard(k){
     <div class="kidhead"><span class="avatar-md">${avatar(k.avatar)}</span><div class="grow"><h3>${esc(k.nick||"")}</h3><p class="small muted">${gradeOf(p)?"الصف "+gradeLv(gradeOf(p)).short+" · ":""}${d?(cur?`المحطة الحالية: ${esc(cur.title)} · ${LV[cur.lv].name}`:"أنهى كل المحطات"):"لسا ما لعب لعبة التشخيص"}</p></div><span class="chip lit">${litCount(p)} من ${SKILLS.length}</span></div>
     ${d?`<div style="display:grid;gap:10px">
       <div class="row between"><h4 style="margin:0;color:var(--logo)">التشخيص الأولي · ${fmtDate(d.at)}</h4><button class="btn btn-line btn-sm" type="button" data-report="${esc(k.id)}">انسخ التقرير</button></div>
-      <p class="small">${d.start&&skillById[d.start]?`بلّش من <b>${esc(skillById[d.start].title)}</b> (${LV[skillById[d.start].lv].name}).`:"متمكّن من كل المهارات اللي انختبرت."} جاوب على ${d.count} ألغاز.</p>
+      <p class="small">${d.start&&skillById[d.start]?`بلّش من <b>${esc(skillById[d.start].title)}</b> (${LV[skillById[d.start].lv].name}).`:"متمكّن من كل المهارات اللي انختبرت."} جاوب على ${arNum(d.count)} ${d.count>2&&d.count<11?"ألغاز":"لغز"}.</p>
       ${levelTable(d,true)}
       ${Object.keys(d.mis||{}).filter(id=>misById[id]).length?`<div style="display:grid;gap:8px"><b class="small">أفكار بنشتغل عليها، وكيف بتساعدوه بالبيت:</b><div class="ideas">${Object.keys(d.mis).filter(id=>misById[id]).map(id=>`<div class="idea">${BULB}<div><b>${esc(misById[id].title)}</b><p class="small muted">${mathify(HINT[id])}</p></div></div>`).join("")}</div></div>`:""}
       ${d.report?`<details class="detail"><summary>تقرير نبراس للطالب (ذكاء اصطناعي)</summary><div class="small" style="display:grid;gap:6px;margin-top:8px">${md(d.report)}</div></details>`:""}
