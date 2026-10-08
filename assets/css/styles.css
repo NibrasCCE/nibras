@@ -982,3 +982,17 @@ a.hm-vid:hover{transform:translateY(-2px)}
   .hm-trail li + li::before{width:14px;margin-inline:5px}
   .hm-grid{grid-template-columns:1fr}
 }
+
+/* ---------- help page ---------- */
+.helpbtn{display:none;text-decoration:none}
+.helpbtn svg{width:20px;height:20px}
+@media (max-width:700px){.helpbtn:not([hidden]){display:grid}}
+.help-tips{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.help-tip{display:grid;gap:2px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm);padding:14px 16px;text-decoration:none;color:var(--ink)}
+.help-tip:hover{border-color:var(--lamp)}
+@media (max-width:520px){.help-tips{grid-template-columns:1fr}}
+.help-form{display:grid;gap:14px}
+.help-form h3{margin:0}
+.field textarea,.field select{width:100%;border:2px solid var(--line);border-radius:var(--r-sm);padding:12px 14px;background:var(--surface);font-size:1.05rem;color:var(--ink)}
+.field textarea{resize:vertical;min-height:130px;line-height:1.6}
+.field textarea:focus,.field select:focus{border-color:var(--brand-text);outline:none}

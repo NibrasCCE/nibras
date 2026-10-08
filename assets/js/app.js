@@ -513,13 +513,14 @@ function markLit(sid){
 
 /* ---------- navigation ---------- */
 const TAB_IC={
+  help:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/></svg>',
   home:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg>',
   path:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"/></svg>',
   play:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v3h4V3"/><path d="M7 6h10l-1.5 13h-7z"/><path d="M12 11v4"/></svg>',
   ask:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 5h16v11H10l-5 4v-4H4z"/><path d="M9 10.5h.01M12 10.5h.01M15 10.5h.01" stroke-linecap="round" stroke-width="2.6"/></svg>',
   me:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>'
 };
-const TABS=[["home","الرئيسية","home"],["path","مساري","path"],["play","التشخيص","play"],["ask","اسأل نبراس","ask"],["me","حسابي","me"]];
+const TABS=[["home","الرئيسية","home"],["play","التشخيص","play"],["path","مساري","path"],["ask","اسأل نبراس","ask"],["me","حسابي","me"]];
 const route=()=>location.hash.replace(/^#/,"")||"home";
 function tabOf(r){if(r.startsWith("skill-")||r.startsWith("quiz-"))return"path";if(r==="result")return"play";return r;}
 function renderNav(){
@@ -529,7 +530,9 @@ function renderNav(){
   if(!u&&route()==="home"){
     $("#nav").innerHTML=[["ls-who","من هو نبراس؟"],["ls-for","لمن نبراس؟"],["nb-plans-h","الاشتراكات"],["ls-why","لماذا من المستوى؟"]].map(([id,l])=>`<a href="#home" data-sec="${id}">${l}</a>`).join("");
     $("#nav").querySelectorAll("[data-sec]").forEach(a=>a.onclick=e=>{e.preventDefault();const t=document.getElementById(a.dataset.sec);if(t)t.closest("section").scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth",block:"start"});});
-  } else $("#nav").innerHTML=tabs.filter(x=>x[0]!=="me").map(([id,l])=>`<a href="#${id}"${t===id?' aria-current="page"':""}>${l}</a>`).join("");
+  } else $("#nav").innerHTML=tabs.filter(x=>x[0]!=="me").map(([id,l])=>`<a href="#${id}"${t===id?' aria-current="page"':""}>${l}</a>`).join("")+(u?`<a href="#help"${t==="help"?' aria-current="page"':""}>مساعدة</a>`:"");
+  let hb=$("#helpbtn");if(!hb){hb=document.createElement("a");hb.id="helpbtn";hb.className="mode helpbtn";hb.href="#help";hb.setAttribute("aria-label","مساعدة وتواصل معنا");hb.innerHTML=TAB_IC.help;$("#me").before(hb);}
+  hb.hidden=!u;
   $("#tabbar").style.gridTemplateColumns=`repeat(${tabs.length||1},1fr)`;
   $("#tabbar").innerHTML=tabs.map(([id,l,ic])=>`<a href="#${id}"${t===id?' aria-current="page"':""}><span class="ic">${TAB_IC[ic]}</span><span>${l}</span></a>`).join("");
   const me=$("#me");
@@ -545,6 +548,7 @@ function render(){
   bindSession();renderNav();
   const u=ME(),r=route();
   if(!u){if(r==="auth-student")return vAuth("student");if(r==="auth-parent")return vAuth("parent");return vLanding();}
+  if(r==="help")return vHelp();
   if(u.role==="parent")return vParent();
   if(u.role==="teacher"){if(r!=="ask"){location.hash="#ask";return;}return vAsk();} /* guest teacher: chat only */
   if(r.startsWith("skill-")&&skillById[r.slice(6)])return canOpen(r.slice(6))?vSkill(r.slice(6)):vLocked(r.slice(6));
@@ -552,6 +556,50 @@ function render(){
   ({home:vHome,play:vPlay,result:vResult,path:vPath,ask:vAsk,me:vMe}[r]||vHome)();
 }
 window.addEventListener("hashchange",()=>{if(G&&route()!=="play")G=null;if(P&&!route().startsWith("skill-"))P=null;if(QZ&&!route().startsWith("quiz-"))QZ=null;render();window.scrollTo(0,0);});
+
+/* ---------- help: a message from the student / parent straight to the team's e-mail ----------
+   Sent through FormSubmit (formsubmit.co), a free form-to-e-mail service: no server of our own.
+   The very first message triggers a one-time "Activate form" e-mail to CONTACT_EMAIL; after that click,
+   every message arrives in that inbox. */
+const CONTACT_EMAIL=(window.NIBRAS_CONFIG&&NIBRAS_CONFIG.CONTACT_EMAIL)||"laraanqawii@gmail.com";
+const HELP={sending:false,sent:false,err:""};
+function vHelp(){
+  const u=ME(),who=u?(u.role==="student"?u.nick:u.role==="parent"?(u.name||"ولي أمر"):"معلم/ة"):"";
+  const role=u?({student:"طالب",parent:"ولي أمر",teacher:"معلم"}[u.role]||""):"زائر";
+  if(HELP.sent){app.innerHTML=`<section class="view"><div class="card done help-done">${LANTERN("big on")}<h2>وصلتنا رسالتك!</h2><p class="muted">شكراً إنك كتبتلنا. فريق نبراس رح يقرأها ويرد عليك بأقرب وقت.</p>
+    <div class="row" style="justify-content:center"><button class="btn btn-line" id="hagain" type="button">ابعت رسالة ثانية</button><a class="btn btn-go" href="#home">رجوع للرئيسية</a></div></div></section>`;
+    $("#hagain").onclick=()=>{HELP.sent=false;vHelp();};return;}
+  app.innerHTML=`<section class="view">
+    <div><p class="eyebrow">مساعدة وتواصل معنا</p><h2>كيف بنقدر نساعدك؟</h2></div>
+    ${u&&u.role==="student"?`<div class="help-tips">
+      <a class="help-tip" href="#ask"><b>عندك سؤال رياضيات؟</b><span class="small muted">«اسأل نبراس» بيساعدك خطوة خطوة.</span></a>
+      <a class="help-tip" href="#play"><b>بدك تعيد التشخيص؟</b><span class="small muted">العبه من جديد من صفحة التشخيص.</span></a>
+    </div>`:""}
+    <form class="card help-form" id="hf" novalidate>
+      <h3>ابعتلنا رسالة</h3>
+      <p class="small muted">مشكلة بالموقع، اقتراح، أو أي سؤال للفريق. الرسالة بتوصل لإيميل فريق نبراس.</p>
+      <div class="field"><label for="h-kind">نوع الرسالة</label><select id="h-kind"><option>مشكلة بالموقع</option><option>اقتراح</option><option>سؤال للفريق</option><option>إشي ثاني</option></select></div>
+      <div class="field"><label for="h-msg">رسالتك</label><textarea id="h-msg" rows="5" maxlength="2000" placeholder="اكتب رسالتك هون…" required></textarea></div>
+      <div class="field"><label for="h-reply">كيف نرد عليك؟ <span class="small muted">(اختياري)</span></label><input id="h-reply" maxlength="80" dir="auto" placeholder="إيميل أو رقم جوال"></div>
+      <p class="tiny">ما تكتب معلومات خاصة زي كلمة السر.</p>
+      ${HELP.err?`<p class="fb hint" role="alert">${esc(HELP.err)}</p>`:""}
+      <div class="row"><button class="btn btn-go" id="h-send" type="submit"${HELP.sending?" disabled":""}>${HELP.sending?"عم نبعت…":"ابعت الرسالة"}</button></div>
+    </form>
+  </section>`;
+  $("#hf").onsubmit=async e=>{e.preventDefault();
+    const msg=$("#h-msg").value.trim(),kind=$("#h-kind").value,reply=$("#h-reply").value.trim();
+    const back=()=>{vHelp();$("#h-msg").value=msg;$("#h-kind").value=kind;$("#h-reply").value=reply;};
+    if(msg.length<3){HELP.err="اكتب رسالتك أول.";back();$("#h-msg").focus();return;}
+    const data={_subject:"نبراس · "+kind+(who?" · من "+who:""),_template:"table",_captcha:"false",
+      "النوع":kind,"الرسالة":msg,"من":who||"زائر","الدور":role,"طريقة الرد":reply||"ما كتب","الصفحة":location.href.split("#")[0]};
+    HELP.sending=true;HELP.err="";$("#h-send").disabled=true;$("#h-send").textContent="عم نبعت…";
+    try{const r=await fetch("https://formsubmit.co/ajax/"+encodeURIComponent(CONTACT_EMAIL),{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify(data)});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok||String(j.success)==="false")throw new Error(j.message||("HTTP "+r.status));
+      HELP.sending=false;HELP.sent=true;vHelp();beep("win");}
+    catch(err){console.warn("[help]",err);HELP.sending=false;HELP.err="ما قدرنا نبعت الرسالة هسا. تأكد من الإنترنت وجرّب كمان مرة.";back();}
+  };
+}
 
 /* ---------- landing ---------- */
 const IC_KID='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="3.5"/><path d="M6 21v-3a6 6 0 0 1 12 0v3"/><path d="M9 14l3 3 3-3"/></svg>';
