@@ -1064,7 +1064,7 @@ async function endGame(){
   logEvent("diag");
   notifyParents("diag");
   S.diag.sentTo=Store.parentCount();
-  save();G=null;REP.busy=false;REP.fail=null;beep("win");
+  save();G=null;REP.busy=false;REP.fail=null;PATHVIEW="plan";beep("win");
   if(route()==="result")vResult();else location.hash="#result";
 }
 
@@ -1163,7 +1163,39 @@ function vResult(){
 }
 
 /* ---------- learning path ---------- */
+/* «مساري» has two views: «المطلوب مني» (only the skills the diagnosis asks for) and «كل المهارات» (the whole path) */
+let PATHVIEW="plan";
+const pathTabs=()=>`<div class="segtabs" role="group" aria-label="طريقة عرض المسار"><button type="button" data-pv="plan" aria-pressed="${PATHVIEW==="plan"}">المطلوب مني</button><button type="button" data-pv="all" aria-pressed="${PATHVIEW==="all"}">كل المهارات</button></div>`;
+function bindPathTabs(){app.querySelectorAll("[data-pv]").forEach(b=>b.onclick=()=>{PATHVIEW=b.dataset.pv;beep("pop");vPath();});}
+/* the skills the diagnosis put on the student's plan: answered wrong, or not asked and not covered by a right answer */
+const planOf=p=>{const d=diagOf(p);return d?pathOf(p).filter(s=>["gap","partial","untested"].includes(stOf(d,s.id))):[];};
+function ringSVG(done,total){const r=34,c=2*Math.PI*r,f=total?done/total:1;
+  return `<svg class="ring" viewBox="0 0 84 84" aria-hidden="true"><circle cx="42" cy="42" r="${r}" fill="none" stroke="var(--surface-2)" stroke-width="9"/><circle cx="42" cy="42" r="${r}" fill="none" stroke="var(--lamp)" stroke-width="9" stroke-linecap="round" stroke-dasharray="${(c*f).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 42 42)"/><text x="42" y="42" text-anchor="middle" font-weight="900" font-size="20" fill="var(--logo)">${arNum(done)}</text><text x="42" y="58" text-anchor="middle" font-weight="700" font-size="11" fill="var(--ink-3)">من ${arNum(total)}</text></svg>`;}
+function vPlan(){
+  const d=S.diag,plan=planOf(S),done=plan.filter(s=>isLit(s.id)),todo=plan.filter(s=>!isLit(s.id));
+  const now=todo.filter(s=>canOpen(s.id)),later=todo.filter(s=>!canOpen(s.id));
+  const why=id=>["gap","partial"].includes(stOf(d,id))?"غلطت فيها بالتشخيص":"بدنا نتأكد منها";
+  const state=id=>{const q=quizOf(S,id),k=S.streak[id]||0;
+    return q?`${starsHTML(q.best)}<span class="small muted">أحسن نتيجة بالكويز</span>`:k?`<span class="small">سلسلة ${arNum(k)} من ${arNum(MASTER_STREAK)}</span>`:`<span class="small muted">لسا ما بلّشت</span>`;};
+  const card=(sk,kind)=>{const id=sk.id;
+    if(kind==="now")return `<div class="plancard now"><div class="grow"><b><span class="sknum">${skNum(id)}</span>${esc(sk.title)}</b><p class="small muted">${why(id)} · ${LV[sk.lv].name}</p><div class="row" style="gap:8px;align-items:center">${state(id)}</div></div><a class="btn btn-go btn-sm" href="#skill-${id}">كمّل</a></div>`;
+    if(kind==="later")return `<div class="plancard later"><span class="lockic">${LOCK}</span><div class="grow"><b><span class="sknum">${skNum(id)}</span>${esc(sk.title)}</b><p class="small muted">${why(id)} · بتنفتح بعد ما تخلّص ${preOf(id).filter(x=>!isLit(x)).map(x=>`<b>${skNum(x)}</b>`).join(" و ")}</p></div></div>`;
+    return `<div class="plancard done"><span class="orb sm">${LANTERN("on")}</span><div class="grow"><b><span class="sknum">${skNum(id)}</span>${esc(sk.title)}</b>${quizOf(S,id)?`<div>${starsHTML(quizOf(S,id).best)}</div>`:""}</div><a class="btn btn-line btn-sm" href="#skill-${id}">راجع</a></div>`;};
+  const msg=!plan.length?"ما في مهارات مطلوبة منك! جاوبت صح على كل إشي بالتشخيص.":!todo.length?"خلّصت كل خطتك! يعطيك العافية.":done.length?"ماشي منيح، كمّل محطة محطة.":"هاي المهارات اللي بدنا نشتغل عليها سوا، من الأساس لفوق.";
+  app.innerHTML=`<section class="view">
+    <div class="row between" style="align-items:flex-end"><div><p class="eyebrow">خطة ${esc(ME().nick)}</p><h2>المطلوب مني</h2></div></div>
+    ${pathTabs()}
+    <div class="card planhead">${ringSVG(done.length,plan.length)}<div><b>${plan.length?`خلّصت ${arNum(done.length)} من ${arNum(plan.length)} ${plan.length>2&&plan.length<11?"مهارات":"مهارة"}`:"خطتك فاضية"}</b><p class="small muted">${msg}</p></div></div>
+    ${now.length?`<div class="plansec"><h3>اشتغل عليها هلأ</h3>${now.map(s=>card(s,"now")).join("")}</div>`:""}
+    ${later.length?`<div class="plansec"><h3>بعدين</h3>${later.map(s=>card(s,"later")).join("")}</div>`:""}
+    ${done.length?`<div class="plansec"><h3>خلّصتها ✦</h3>${done.map(s=>card(s,"done")).join("")}</div>`:""}
+    <div class="row"><button class="btn btn-line" type="button" data-pv="all">شوف كل المسار</button>${!plan.length||!todo.length?`<a class="btn btn-go" href="#ask">تحدّى حالك مع نبراس</a>`:""}</div>
+    <p class="draft">المهارات اللي جاوبتها صح، أو المفهومة من جوابك، مش بالخطة. بتلاقيها بـ «كل المهارات».</p>
+  </section>`;
+  bindPathTabs();
+}
 function vPath(){
+  if(S.diag&&PATHVIEW==="plan")return vPlan();
   if(!S.diag){app.innerHTML=`<section class="view"><div class="card" style="display:grid;gap:12px"><p class="eyebrow">أهلاً ${esc(ME().nick)}</p><h2>خلينا نعرف من وين نبلّش</h2><p class="muted">العب رحلة الفوانيس وبعدها بيطلعلك مسارك.</p><div><a class="btn btn-go" href="#play">ابدأ اللعبة</a></div></div></section>`;return;}
   const cur=currentSkill(),litN=litCount(S);
   const det=Object.entries(S.detected).sort((a,b)=>b[1]-a[1]).slice(0,3);
@@ -1173,6 +1205,7 @@ function vPath(){
       <div><p class="eyebrow">مسار ${esc(ME().nick)}</p><h2>${cur?`المحطة الجاية: ${esc(cur.title)}`:"ضوّيت كل الفوانيس!"}</h2></div>
       <span class="chip lit">${litN} من ${pathOf(S).length} فوانيس</span>
     </div>
+    ${pathTabs()}
     <details class="legend"><summary>شو معنى الكلمات؟</summary><ul class="small muted">
       <li><b>جاوبتها صح ✦</b>: انسألت عنها بالتشخيص وجاوبت صح.</li>
       <li><b>مفهومة من جوابك</b>: ما سألناك عنها، بس جاوبت صح على مهارة مبنية عليها.</li>
@@ -1197,6 +1230,7 @@ function vPath(){
     ${det.length?`<div class="card" style="display:grid;gap:10px"><h3>أفكار بنشتغل عليها</h3><div class="ideas">${det.map(([id])=>`<div class="idea">${BULB}<div><b>${esc(misById[id].title)}</b><p class="small muted">${mathify(HINT[id])}</p></div></div>`).join("")}</div></div>`:""}
     <p class="draft">محتوى تجريبي (مسودة) بانتظار مراجعة معلم رياضيات ومطابقته مع المنهاج.</p>
   </section>`;
+  bindPathTabs();
 }
 
 /* ---------- skill lesson + practice ---------- */

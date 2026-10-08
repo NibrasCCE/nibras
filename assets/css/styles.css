@@ -897,3 +897,17 @@ body.wide .top{background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-
 .legend{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 14px}
 .legend summary{cursor:pointer;font-weight:800;color:var(--brand-text)}
 .legend ul{margin:8px 0 0;padding-inline-start:1.2em;display:grid;gap:4px}
+/* «المطلوب مني»: the plan after the diagnosis */
+.planhead{display:flex;align-items:center;gap:16px}
+.planhead .ring{width:84px;height:84px;flex:none}
+.plansec{display:grid;gap:10px}
+.plansec h3{margin:6px 0 0}
+.plancard{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm);padding:12px 14px}
+.plancard .grow{flex:1;min-width:0;display:grid;gap:4px}
+.plancard b{color:var(--logo)}
+.plancard.now{border-color:var(--lamp);box-shadow:var(--shadow)}
+.plancard.later{opacity:.75}
+.plancard .lockic svg{width:22px;height:22px;color:var(--ink-3)}
+.plancard .orb.sm{width:40px;height:40px;border-width:2px;flex:none;background:var(--glow-soft);border-color:var(--lamp)}
+.plancard .orb.sm svg{width:20px;height:24px}
+.plancard .stars svg{width:16px;height:16px}
