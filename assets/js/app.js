@@ -16,10 +16,12 @@ const SK_NUM=Object.fromEntries(LEVELS.flatMap(l=>SK_LV[l.id].map((id,i)=>[id,l.
 const skNum=id=>arNum(SK_NUM[id]||"");
 const preOf=id=>(skillById[id].pre||[]).filter(x=>skillById[x]);
 const nextOf=id=>SKILLS.filter(s=>(s.pre||[]).includes(id)).map(s=>s.id);
-/* the skill quiz: up to QUIZ_MAX of the skill's questions, one try each, the correction at the end.
+/* the skill quiz: QUIZ_MAX questions drawn at random from the skill's quiz bank, one try each, the correction at the end.
    The skill's grade is the best quiz so far: 3 stars = all right, 2 = one mistake, 1 = half right or more.
    Two stars or more also light the skill's lantern. */
 const QUIZ_MAX=5;
+/* the quiz's own question bank (QUIZ_QS in data.js), not the diagnosis/practice questions */
+const quizPool=sid=>{const z=(typeof QUIZ_QS!=="undefined"?QUIZ_QS:[]).filter(q=>q.skill===sid);return z.length?z:QS.filter(q=>q.skill===sid);};
 const GRADES=[["لسا بدها تدريب","plain"],["بداية حلوة","calm"],["متقدّم","good"],["متمكّن","lit"]];
 const starsFor=(c,n)=>!n?0:c===n?3:c===n-1?2:c*2>=n?1:0;
 const quizOf=(p,sid)=>(p.quiz||{})[sid]||null;
@@ -511,12 +513,13 @@ function markLit(sid){
 
 /* ---------- navigation ---------- */
 const TAB_IC={
+  home:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg>',
   path:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"/></svg>',
   play:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v3h4V3"/><path d="M7 6h10l-1.5 13h-7z"/><path d="M12 11v4"/></svg>',
   ask:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 5h16v11H10l-5 4v-4H4z"/><path d="M9 10.5h.01M12 10.5h.01M15 10.5h.01" stroke-linecap="round" stroke-width="2.6"/></svg>',
   me:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>'
 };
-const TABS=[["play","التشخيص","play"],["path","مساري","path"],["ask","اسأل نبراس","ask"],["me","حسابي","me"]];
+const TABS=[["home","الرئيسية","home"],["path","مساري","path"],["ask","اسأل نبراس","ask"],["me","حسابي","me"]];
 const route=()=>location.hash.replace(/^#/,"")||"home";
 function tabOf(r){if(r.startsWith("skill-")||r.startsWith("quiz-"))return"path";if(r==="result")return"play";return r;}
 function renderNav(){
@@ -532,8 +535,20 @@ function renderNav(){
   const me=$("#me");
   if(!u){me.hidden=true;return;}
   me.hidden=false;
-  if(u.role==="student"){me.innerHTML=`<span class="avatar-sm">${avatar(u.avatar)}</span><span>${esc(u.nick)}</span>`;me.onclick=()=>{location.hash="#me";};}
+  if(u.role==="student"){me.innerHTML=`<span class="avatar-sm">${avatar(u.avatar)}</span><span>${esc(u.nick)}</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>`;
+    me.setAttribute("aria-haspopup","true");me.setAttribute("aria-expanded","false");me.onclick=e=>{e.stopPropagation();toggleMeMenu();};}
   else{me.innerHTML=`<span class="dot">${esc((u.name||(u.role==="teacher"?"م":"و")).slice(0,1))}</span><span>خروج</span>`;me.onclick=logout;}
+}
+/* the student's account menu (under the name button): account + parent link, diagnosis again, log out */
+function toggleMeMenu(force){
+  let m=$("#memenu");const me=$("#me");
+  if(!m){m=document.createElement("div");m.id="memenu";m.className="memenu";m.hidden=true;me.parentNode.appendChild(m);
+    document.addEventListener("click",e=>{const mm=$("#memenu");if(mm&&!mm.hidden&&!mm.contains(e.target))toggleMeMenu(false);});
+    document.addEventListener("keydown",e=>{const mm=$("#memenu");if(e.key==="Escape"&&mm&&!mm.hidden){toggleMeMenu(false);$("#me").focus();}});}
+  const open=force!=null?force:m.hidden;
+  if(open){m.innerHTML=`<a href="#me">حسابي وربط الأهل</a><a href="#play">${S&&S.diag?"أعد التشخيص":"ابدأ التشخيص"}</a><hr><button type="button" id="mm-out">تسجيل خروج</button>`;
+    m.querySelectorAll("a").forEach(a=>a.onclick=()=>toggleMeMenu(false));$("#mm-out",m).onclick=()=>{toggleMeMenu(false);logout();};}
+  m.hidden=!open;me.setAttribute("aria-expanded",String(open));
 }
 async function logout(){if(CHAT.ctl)CHAT.ctl.abort();if(isGuest()&&typeof Store.endGuest==="function")await Store.endGuest();else await Store.logout();S=null;GUEST_S=null;G=null;P=null;PV.kids=null;PV.err="";CHAT.err="";REP.fail=null;location.hash="#home";render();toast("سجّلت خروج");}
 function render(){
@@ -548,7 +563,7 @@ function render(){
   if(r.startsWith("quiz-")&&skillById[r.slice(5)])return canOpen(r.slice(5))?vQuiz(r.slice(5)):vLocked(r.slice(5));
   ({home:vHome,play:vPlay,result:vResult,path:vPath,ask:vAsk,me:vMe}[r]||vHome)();
 }
-window.addEventListener("hashchange",()=>{if(G&&route()!=="play")G=null;if(P&&!route().startsWith("skill-"))P=null;if(QZ&&!route().startsWith("quiz-"))QZ=null;render();window.scrollTo(0,0);});
+window.addEventListener("hashchange",()=>{const mm=$("#memenu");if(mm)mm.hidden=true;if(G&&route()!=="play")G=null;if(P&&!route().startsWith("skill-"))P=null;if(QZ&&!route().startsWith("quiz-"))QZ=null;render();window.scrollTo(0,0);});
 
 /* ---------- landing ---------- */
 const IC_KID='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="3.5"/><path d="M6 21v-3a6 6 0 0 1 12 0v3"/><path d="M9 14l3 3 3-3"/></svg>';
@@ -751,21 +766,67 @@ function vAuth(role){
 }
 
 /* ---------- student home ---------- */
+/* home: what to do now (the path page shows the whole plan, so nothing of it is repeated here).
+   Nibras the teacher + the next step; question of the day; the idea Nibras noticed; lesson videos; quizzes to improve; lights so far. */
 function vHome(){
-  const u=ME(),d=S.diag,cur=currentSkill();
-  app.innerHTML=`<section class="view">
-    <div class="hero">
-      <span class="avatar-lg">${avatar(u.avatar)}</span>
-      <h1>أهلاً ${esc(u.nick)}!</h1>
-      <p class="lead">${d?(cur?`محطتك الجاية: <b style="color:var(--logo)">${esc(cur.title)}</b> (${LV[cur.lv].name}).`:"ضوّيت كل الفوانيس! جرّب تتحدّى حالك مع نبراس."):"خلينا نكتشف من وين تبلّش بلعبة قصيرة، ألغازها بتتغيّر حسب جوابك."}</p>
-      <div class="row" style="justify-content:center">
-        <a class="btn btn-go" href="#${d?(cur?"skill-"+cur.id:"path"):"play"}">${d?"كمّل رحلتك":"ابدأ اللعبة"}</a>
-        <a class="btn btn-line" href="#ask">اسأل نبراس</a>
-      </div>
-    </div>
-    <div class="lvgrid">${LEVELS.filter(l=>!gradeOf(S)||l.g<=gradeOf(S)).map(l=>{const n=SK_LV[l.id].length,k=litCount(S,l.id);return `<div class="lvbox"><div class="row between"><h4>${l.name}</h4><span class="chip ${k===n?"lit":"plain"}">${k} من ${n}</span></div><div class="pbar" aria-hidden="true"><i style="width:${Math.round(k/n*100)}%"></i></div></div>`;}).join("")}</div>
+  const u=ME(),d=S.diag,plan=d?planOf(S):[],todo=plan.filter(s=>!isLit(s.id)),nowSk=todo.find(s=>canOpen(s.id))||null;
+  const why=id=>["gap","partial"].includes(stOf(d,id))?"غلطت فيها بالتشخيص، فبنبلّش من هون عشان نبني عليها صح.":"بدنا نتأكد منها قبل ما نطلع لفوق.";
+  const TEACH=`<div class="hm-teacher"><span class="hm-bubble">${!d?"أهلاً! أنا نبراس.":nowSk?`يلا ${esc(u.nick)}، نكمّل؟`:"يعطيك العافية!"}</span><img src="assets/img/nibras-teacher.webp" alt="المعلم نبراس" width="380" height="456"></div>`;
+  let task;
+  if(!d)task=`<p class="hm-hello">أهلاً ${esc(u.nick)} 👋</p><h1>خلينا نعرف من وين تبلّش</h1><p class="hm-why">لعبة قصيرة ألغازها بتتغيّر حسب جوابك. بدون وقت وبدون علامات، ومنها بنعمللك خطتك.</p>
+    <div class="hm-row"><a class="btn btn-go" href="#play">ابدأ اللعبة</a></div>`;
+  else if(nowSk){const id=nowSk.id,k=S.streak[id]||0,q=quizOf(S,id),started=k>0||!!q;
+    const step=q?"quiz":started?"practice":"lesson";
+    task=`<p class="hm-hello">أهلاً ${esc(u.nick)} 👋 خطوتك الجاية:</p>
+    <h1><span class="sknum">${skNum(id)}</span> ${esc(nowSk.title)}</h1><p class="hm-why">${why(id)}</p>
+    <ol class="hm-trail" aria-label="خطوات المهارة">
+      <li class="${started?"done":"cur"}"><span class="dot">${started?"✓":"١"}</span>الشرح</li>
+      <li class="${q?"done":started?"cur":""}"><span class="dot">${q?"✓":started?arNum(`${k}/${MASTER_STREAK}`):"٢"}</span>التمارين</li>
+      <li class="${q?"cur":""}"><span class="dot">★</span>الكويز</li></ol>
+    <div class="hm-row"><a class="btn btn-go" href="#${step==="quiz"?"quiz-":"skill-"}${id}">${step==="lesson"?"ابدأ بالشرح":step==="practice"?"كمّل التمارين":"حسّن نتيجة الكويز"} ←</a><a class="btn btn-line btn-sm" href="#path">مساري كامل</a></div>`;}
+  else task=`<p class="hm-hello">أهلاً ${esc(u.nick)} 👋</p><h1>${plan.length?"خلّصت كل خطتك!":"ما في مهارات مطلوبة منك!"}</h1><p class="hm-why">جرّب تتحدّى حالك مع نبراس، أو حسّن نجوم الكويزات.</p>
+    <div class="hm-row"><a class="btn btn-go" href="#ask">تحدّى حالك مع نبراس</a><a class="btn btn-line btn-sm" href="#path">مساري كامل</a></div>`;
+
+  /* question of the day: a quiz-bank bubble question from the current skill (or the plan), the same one all day */
+  const pool=(typeof QUIZ_QS!=="undefined"?QUIZ_QS:[]).filter(q=>q.type==="bubbles"&&q.options.every(o=>String(o.t).length<14));
+  const ids=nowSk?[nowSk.id]:plan.map(s=>s.id);
+  const qs=pool.filter(q=>ids.includes(q.skill)),day=Math.floor(Date.now()/864e5);
+  const qd=qs.length?qs[day%qs.length]:null;
+  /* the idea Nibras noticed most */
+  const top=Object.entries(S.detected||{}).filter(([id])=>misById[id]).sort((a,b)=>b[1]-a[1])[0];
+  const mis=top?misById[top[0]]:null;
+  /* lesson videos, quizzes to improve, lights */
+  const vids=SKILLS.filter(s=>window.NibrasLesson&&NibrasLesson.has(s.id));
+  const imp=SKILLS.filter(s=>{const q=quizOf(S,s.id);return q&&q.best<3;}).slice(0,3);
+  const stars=SKILLS.reduce((n,s)=>n+((quizOf(S,s.id)||{}).best||0),0),quizzes=SKILLS.filter(s=>quizOf(S,s.id)).length;
+  const IC={q:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/></svg>',
+    v:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>',
+    s:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2l-5.7 3.1 1.2-6.4L2.8 9.5l6.4-.8z"/></svg>',
+    t:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/></svg>'};
+  const cards=[];
+  if(qd)cards.push(`<section class="hm-card hm-qday" aria-labelledby="hm-q"><h2 id="hm-q"><span class="hm-b honey">${IC.q}</span>سؤال اليوم</h2>
+    <p class="small muted">سؤال واحد سريع${nowSk?" من مهارتك الحالية":""}. ما بيأثّر على نتيجتك.</p><p class="stem">${mathify(qd.stem)}</p>
+    <div class="hm-opts" role="group" aria-label="الخيارات">${qd.options.map((o,i)=>`<button class="hm-opt" type="button" data-i="${i}">${mathify(o.t)}</button>`).join("")}</div>
+    <p class="hm-fb" id="hm-fb" aria-live="polite">اختار جوابك.</p></section>`);
+  if(mis)cards.push(`<section class="hm-card" aria-labelledby="hm-n"><h2 id="hm-n"><span class="hm-b apricot">${BULB}</span>نبراس لاحظ</h2>
+    <p><b>${esc(mis.title)}</b></p><p class="small">${mathify(HINT[mis.id]||mis.description)}</p>${mis.example?`<p class="hm-ex small">مثال على الغلط: ${mathify(mis.example)}</p>`:""}
+    <div class="hm-row"><a class="btn btn-line btn-sm" href="#ask" id="hm-askmis">اسأل نبراس عنها</a></div></section>`);
+  if(vids.length)cards.push(`<section class="hm-card hm-wide" aria-labelledby="hm-v"><h2 id="hm-v"><span class="hm-b sky">${IC.v}</span>شروحات نبراس بالفيديو</h2>
+    <div class="hm-vids">${vids.map(s=>{const open=canOpen(s.id);return `<${open?"a":"div"} class="hm-vid${open?"":" locked"}"${open?` href="#skill-${s.id}"`:""}><span class="th"><img src="assets/img/nibras-teacher.webp" alt="" width="380" height="456" loading="lazy"><span class="play">${open?IC.v:LOCK}</span></span>
+      <span class="meta"><b><span class="sknum">${skNum(s.id)}</span>${esc(s.title)}</b><small>${open?"شاهد الشرح مع نبراس":"بتنفتح لما توصلها بمسارك"}</small></span></${open?"a":"div"}>`;}).join("")}</div></section>`);
+  if(imp.length)cards.push(`<section class="hm-card" aria-labelledby="hm-s"><h2 id="hm-s"><span class="hm-b honey">${IC.s}</span>كمّل نجومك</h2><p class="small muted">كويزات بتقدر تحسّن نجومها.</p>
+    <ul class="hm-imp">${imp.map(s=>`<li><div><b><span class="sknum">${skNum(s.id)}</span>${esc(s.title)}</b>${starsHTML(quizOf(S,s.id).best)}</div><a class="btn btn-line btn-sm" href="#quiz-${s.id}">أعد</a></li>`).join("")}</ul></section>`);
+  if(d)cards.push(`<section class="hm-card hm-wide" aria-labelledby="hm-l"><h2 id="hm-l"><span class="hm-b sage">${IC.t}</span>ضوّيت لحد هسا</h2>
+    <div class="hm-lights"><div class="l1">${LANTERN("on")}<b>${arNum(litCount(S))}</b><span>فوانيس</span></div><div class="l2">${IC.s}<b>${arNum(stars)}</b><span>نجوم</span></div><div class="l3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg><b>${arNum(quizzes)}</b><span>كويزات</span></div></div></section>`);
+  app.innerHTML=`<section class="view hm">
+    <div class="hm-hero">${TEACH}<div class="hm-task">${task}</div></div>
+    ${cards.length?`<div class="hm-grid">${cards.join("")}</div>`:""}
     <p class="draft">المحتوى مسودة بانتظار مراجعة معلم رياضيات ومطابقته مع المنهاج.</p>
   </section>`;
+  if(qd){const fb=$("#hm-fb");app.querySelectorAll(".hm-opt").forEach(b=>b.onclick=()=>{const o=qd.options[+b.dataset.i];
+    app.querySelectorAll(".hm-opt").forEach(x=>{x.disabled=true;if(qd.options[+x.dataset.i].ok)x.classList.add("right");});
+    if(o.ok){fb.textContent="صح! شغلك مرتّب.";beep("ding");}else{b.classList.add("wrong");fb.innerHTML=o.mis&&HINT[o.mis]?mathify(HINT[o.mis]):"الجواب الصح متلوّن بالأخضر.";beep("soft");}});}
+  const am=$("#hm-askmis");if(am)am.onclick=()=>{CHAT.prefill=`نبراس لاحظ عندي فكرة غلط: «${mis.title}». ممكن تشرحلي ياها بمثال بسيط؟`;};
 }
 
 /* ---------- me (student account) ---------- */
@@ -1349,7 +1410,7 @@ function pick(val,btn,placedIdx){
 
 /* ---------- skill quiz + grade ---------- */
 function quizBar(sid,finished){
-  const qz=quizOf(S,sid),n=Math.min(QUIZ_MAX,QS.filter(q=>q.skill===sid).length);
+  const qz=quizOf(S,sid),n=Math.min(QUIZ_MAX,quizPool(sid).length);
   return `<div class="card quizbar"><div class="grow" style="display:grid;gap:4px"><b>كويز المهارة ${skNum(sid)}</b>
     <p class="small muted">${arNum(n)} أسئلة، محاولة وحدة لكل سؤال، والتصحيح بالآخر.${isLit(sid)?"":" نجمتين أو أكثر بيضوّوا الفانوس."}</p>
     ${qz?`<span class="skgrade">${starsHTML(qz.best)}${gradeChip(qz.best)}<span class="tiny">أحسن نتيجة: ${arNum(qz.bestScore!=null?qz.bestScore:qz.score)} من ${arNum(qz.n)}</span></span>`:""}</div>
@@ -1358,13 +1419,13 @@ function quizBar(sid,finished){
 let QZ=null;
 function vQuiz(sid){
   const sk=skillById[sid];
-  if(!QZ||QZ.sid!==sid){const qs=shuffle(QS.filter(q=>q.skill===sid)).slice(0,QUIZ_MAX).sort((a,b)=>a.d-b.d);QZ={sid,qs,i:0,ans:[],done:false,w:null};}
+  if(!QZ||QZ.sid!==sid){const qs=shuffle(quizPool(sid)).slice(0,QUIZ_MAX).sort((a,b)=>a.d-b.d);QZ={sid,qs,i:0,ans:[],done:false,w:null};}
   if(QZ.done)return quizResult(sid);
   const q=QZ.qs[QZ.i],last=QZ.i===QZ.qs.length-1;
   app.innerHTML=`<section class="view">
     <div class="row between"><a class="btn btn-line btn-sm" href="#skill-${sid}">← رجوع للمهارة</a><span class="chip calm">سؤال ${arNum(QZ.i+1)} من ${arNum(QZ.qs.length)}</span></div>
     <div class="card quizhead"><p class="eyebrow">كويز المهارة ${skNum(sid)}</p><h2>${esc(sk.title)}</h2>
-      <div class="qdots" aria-hidden="true">${QZ.qs.map((_,k)=>`<i class="${k<QZ.i?"done":k===QZ.i?"now":""}"></i>`).join("")}</div>
+      <div class="qdots" aria-hidden="true">${QZ.qs.map((_,k)=>`<i class="${k<QZ.i?"qd-done":k===QZ.i?"qd-now":""}"></i>`).join("")}</div>
       <p class="small muted">محاولة وحدة لكل سؤال. التصحيح والتلميحات بآخر الكويز.</p></div>
     <div class="puzzle">
       <div class="ptype"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${TYPE_IC[q.type]}</svg>${TYPE_NAME[q.type]}</div>
