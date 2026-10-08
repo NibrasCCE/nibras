@@ -154,6 +154,18 @@ function tex(t){
   try{ if(window.katex) return `<span class="m">${katex.renderToString(t,{output:"mathml",throwOnError:false})}</span>`; }catch(e){}
   return `<span class="m">${esc(t)}</span>`;
 }
+/* teacher mode: the teacher doesn't know the library codes (m62), so each code becomes the misconception's name.
+   If the model already wrote the name after the code, the code and its separator are dropped; otherwise the code is replaced by «name». */
+const arNorm=s=>String(s).replace(/[\u064B-\u0652\u0640]/g,"").replace(/[أإآ]/g,"ا");
+function plainCodes(s){
+  return String(s).replace(/(الخطأ\s+|خطأ\s+)?(\*\*)?\b(m\d{2})\b(\*\*)?(\s*[|:\u2013\u2014-]\s*)?/g,(all,pre,b1,id,b2,sep,off,str)=>{
+    const m=misById[id];if(!m)return all;
+    const first=arNorm(m.title).split(/\s+/)[0];
+    const rest=arNorm(str.slice(off+all.length).replace(/^[\s*«"(]+/,""));
+    if(first.length>=3&&rest.startsWith(first))return b1&&!b2?b1:"";
+    return (pre||"")+(b1||"")+"«"+m.title+"»"+(b2||"")+(sep||"");
+  });
+}
 function inline(s){
   /* teacher mode: misconception codes (m62) and Latin words (SVG, cm) stay as written; only single letters are variables */
   if(MD_RICH)return String(s).split(/(\$\$[^$\n]+\$\$|\$[^$\n]+\$|\bm\d{2}\b|#[0-9a-fA-F]{6}\b|[A-Za-z]{2,}(?:[-_][A-Za-z]+)*)/g).map(p=>/^\$\$[^$]+\$\$$/.test(p)?tex(p.slice(2,-2)):/^\$[^$]+\$$/.test(p)?tex(p.slice(1,-1))
@@ -1485,7 +1497,7 @@ async function send(text,o){
     else if(c!=="cancelled")CHAT.err="انقطع الاتصال. جرّب ترسل رسالتك مرة ثانية.";
   }finally{CHAT.busy=false;CHAT.stream="";CHAT.ctl=null;save();drawChat();}
 }
-function paintStream(){const el=$("#live");if(el){el.innerHTML=CHAT.stream?md(CHAT.stream,isGuest()?{rich:true}:undefined):'<span class="thinking" aria-label="نبراس بيفكّر"><i></i><i></i><i></i></span>';const box=$("#msgs");if(box)box.scrollTop=box.scrollHeight;}}
+function paintStream(){const el=$("#live");if(el){el.innerHTML=CHAT.stream?(isGuest()?md(plainCodes(CHAT.stream),{rich:true}):md(CHAT.stream)):'<span class="thinking" aria-label="نبراس بيفكّر"><i></i><i></i><i></i></span>';const box=$("#msgs");if(box)box.scrollTop=box.scrollHeight;}}
 function vAsk(){drawChat();}
 function drawChat(){
   if(route()!=="ask")return;
@@ -1515,7 +1527,7 @@ function drawChat(){
         <div class="msg bot">${md(welcome)}</div>
         ${view.map(({role,content,i})=>role==="user"
           ?`<div class="msg me">${/^\[نتيجة لعبة\]/.test(content)?gresHTML(content):md(content.replace(/\n\[أرفق الطالب صورة لحلّه المكتوب\]$/,"\n(📷 صورة الحل)"))}</div>`
-          :`<div class="msg bot">${md(content,guest?{rich:true}:{game:j=>gameHTML(j,i===turns.length-1&&!CHAT.busy&&!off)})}</div>`).join("")}
+          :`<div class="msg bot">${(guest?md(plainCodes(content),{rich:true}):md(content,{game:j=>gameHTML(j,i===turns.length-1&&!CHAT.busy&&!off)}))}</div>`).join("")}
         ${cut?`<div class="controw"><span>الرد طويل وتوقّف قبل نهايته.</span><button class="btn btn-go btn-sm" id="cont" type="button">أكمل</button></div>`:""}
         ${CHAT.busy?`<div class="msg bot" id="live"></div>`:""}
       </div>
