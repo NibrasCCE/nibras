@@ -887,14 +887,9 @@ body.wide .top{background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-
 .isle{min-width:0;flex:0 1 74px}
 .isle-link{min-width:4px}
 @media (max-width:560px){.isle .dot{width:34px;height:34px;font-size:1rem;border-width:2px}.isle small{font-size:.66rem}.isle.now .dot{box-shadow:0 0 0 4px var(--glow-soft)}.isle-link{flex-basis:14px;margin-bottom:18px}}
-/* grade picker (sign-up, diagnosis, my account) */
-.gpick{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;direction:rtl}
-.gpick button{display:grid;justify-items:center;gap:2px;padding:8px 2px;border-radius:12px;border:2px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;cursor:pointer;min-width:0}
-.gpick button b{font-family:var(--f-num);font-size:1.15rem;line-height:1}
-.gpick button small{font-size:.66rem;color:var(--ink-3);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.gpick button[aria-checked="true"]{background:var(--lamp);border-color:var(--lamp);color:var(--on-lamp)}
-.gpick button[aria-checked="true"] small{color:var(--on-lamp)}
-.gpick button:focus-visible{outline:3px solid var(--brand-text);outline-offset:2px}
 /* levels above the student's grade */
 .lvsec.later{opacity:.6}
 @media (max-width:420px){.stop:nth-child(even){transform:translateX(-14px)}}
+/* the typed answer, shown again the way the book writes it (fractions stacked) */
+.anspv{margin:-4px 0 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:var(--ink-2)}
+.anspv .m{font-size:1.25rem;font-weight:800;color:var(--logo)}

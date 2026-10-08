@@ -26,7 +26,7 @@ const quizOf=(p,sid)=>(p.quiz||{})[sid]||null;
 const STAR=on=>`<svg class="star${on?" on":""}" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2l-5.7 3.1 1.2-6.4L2.8 9.5l6.4-.8z"/></svg>`;
 const starsHTML=k=>`<span class="stars" role="img" aria-label="${k} من 3 نجوم">${[1,2,3].map(i=>STAR(i<=k)).join("")}</span>`;
 const gradeChip=k=>`<span class="chip ${GRADES[k][1]}">${GRADES[k][0]}</span>`;
-const DIAG_PICK={s1a:["q1a5","q1a2"],s1b:["q1b2","q1b3"],s1c:["q1c1","q1c2"],s2a:["q2a2","q2a5"],s2b:["q2b1","q2b2"],s2c:["q2c3","q2c1"],s2d:["q2d2","q2d3"],s3a:["q3a2","q3a4"],s3b:["q3b1","q3b2"],s3c:["q3c3","q3c1"],s3d:["q3d2","q3d5"],s4a:["q4a1","q4a3"],s4b:["q4b2","q4b1"],s4c:["q4c1","q4c3"],s4d:["q4d2","q4d1"],s5a:["q5a1","q5a2"],s5b:["q5b1","q5b2"],s5c:["q5c1","q5c2"],s6a:["q6a2","q6a1"],s6b:["q6b2","q6b1"],s6c:["q6c2","q6c1"],s7a:["q7a2","q7a1"],s7b:["q7b1","q7b2"],s7c:["q7c2","q7c1"],s7d:["q7d2","q7d5"]};
+const DIAG_PICK={s1a:["q1a5","q1a2"],s1b:["q1b2","q1b3"],s1c:["q1c1","q1c2"],s2a:["q2a2","q2a5"],s2b:["q2b1","q2b2"],s2c:["q2c3","q2c1"],s2d:["q2d2","q2d3"],s3a:["q3a2","q3a4"],s3b:["q3b1","q3b2"],s3c:["q3c3","q3c1"],s3d:["q3d4","q3d2"],s4a:["q4a2","q4a1"],s4b:["q4b2","q4b1"],s4c:["q4c1","q4c3"],s4d:["q4d2","q4d1"],s5a:["q5a2","q5a1"],s5b:["q5b1","q5b2"],s5c:["q5c1","q5c2"],s6a:["q6a2","q6a1"],s6b:["q6b1","q6b2"],s6c:["q6c2","q6c1"],s7a:["q7a2","q7a1"],s7b:["q7b2","q7b1"],s7c:["q7c2","q7c1"],s7d:["q7d2","q7d5"]};
 const LET=["أ","ب","ج","د"];
 const DAILY_LIMIT=30, MASTER_STREAK=3;
 
@@ -384,7 +384,9 @@ function parseIdent(raw){
 /* ---------- learning state helpers ---------- */
 function bump(mid){if(S&&misById[mid])S.detected[mid]=(S.detected[mid]||0)+1;}
 /* the student's grade (1–7), chosen at sign-up; the path holds the skills up to that grade */
-const gradeOf=p=>p&&p.grade>=1&&p.grade<=LEVELS[LEVELS.length-1].g?p.grade:0;
+/* every student is treated as a grade-7 student (the project's audience), so the path holds grades 1–7 */
+const STUDENT_GRADE=7;
+const gradeOf=p=>p?STUDENT_GRADE:0;
 const gradeLv=g=>LEVELS.find(l=>l.g===g);
 const inPathP=(p,sid)=>{const g=gradeOf(p);return !g||LV[skillById[sid].lv].g<=g;};
 const pathOf=p=>SKILLS.filter(s=>inPathP(p,s.id));
@@ -415,9 +417,6 @@ function vLocked(sid){
   </div></section>`;
 }
 const litCount=(p,lv)=>(lv?SK_LV[lv]:pathOf(p).map(s=>s.id)).filter(id=>isLitP(p,id)).length;
-/* the grade picker: one button per grade */
-const gradePick=sel=>`<div class="gpick" role="radiogroup" aria-label="الصف">${LEVELS.map(l=>`<button type="button" role="radio" aria-checked="${sel===l.g}" data-g="${l.g}"><b>${arNum(l.g)}</b><small>${l.short}</small></button>`).join("")}</div>`;
-function bindGradePick(host,on){host.querySelectorAll(".gpick button").forEach(b=>b.onclick=()=>{host.querySelectorAll(".gpick button").forEach(x=>x.setAttribute("aria-checked",String(x===b)));beep("pop");on(+b.dataset.g);});}
 const STATUS={mastered:["متمكّن","lit"],assumed:["ثابتة","good"],partial:["بدها تقوية","calm"],gap:["رح نشتغل عليها","calm"],untested:["لسا ما وصلناها","plain"]};
 const fmtDate=iso=>{try{return new Date(iso).toLocaleDateString("ar-PS-u-nu-latn",{day:"numeric",month:"long"});}catch(e){return String(iso).slice(0,10);}};
 const fmtTime=iso=>{try{return new Date(iso).toLocaleString("ar-PS-u-nu-latn",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});}catch(e){return String(iso).slice(0,16);}};
@@ -701,7 +700,7 @@ async function guestTeacher(){
 }
 
 /* ---------- auth (demo accounts on this device) ---------- */
-const AUTH={mode:"login",av:"cat",err:"",busy:false,grade:0};
+const AUTH={mode:"login",av:"cat",err:"",busy:false};
 function vAuth(role){
   const isS=role==="student",signup=AUTH.mode==="signup";
   const picks=["نجمة","صقر","قمر","فارس","زيتونة","برق"];
@@ -713,7 +712,6 @@ function vAuth(role){
       <div class="field"><label for="ident">الإيميل أو رقم الجوال</label><input id="ident" dir="ltr" inputmode="email" autocomplete="username" placeholder="name@mail.com أو 059xxxxxxx"></div>
       <div class="field"><label for="pw">كلمة السر</label><div class="pw"><input id="pw" type="password" dir="ltr" autocomplete="${signup?"new-password":"current-password"}" minlength="6" placeholder="${signup?"6 أحرف أو أكثر":""}"><button type="button" id="pwshow">إظهار</button></div></div>
       ${signup&&isS?`<div class="field"><label for="nick">اسم مستعار</label><input id="nick" maxlength="16" autocomplete="off" placeholder="اختار اسم أو اكتب واحد"><div class="picks" aria-label="أسماء مقترحة">${picks.map(p=>`<button type="button" data-p="${p}">${p}</button>`).join("")}</div><span class="tiny">لا تكتب اسمك الحقيقي.</span></div>
-        <div class="field"><span style="font-weight:800">صفي هلأ</span>${gradePick(AUTH.grade)}<span class="tiny">بنبلّش التشخيص بمهارات صفك، وبنرجع للمهارات اللي قبلها إذا احتجنا.</span></div>
         <div class="field"><span style="font-weight:800">اختار شخصيتك</span><div class="avs" role="radiogroup" aria-label="الشخصيات">${AVATARS.map(a=>`<button type="button" class="av" role="radio" aria-checked="${AUTH.av===a.id}" data-av="${a.id}">${avatar(a.id)}<span>${a.name}</span></button>`).join("")}</div></div>`:""}
       ${signup&&!isS?`<div class="field"><label for="code">رمز ربط ابنك/بنتك (اختياري)</label><input id="code" dir="ltr" maxlength="6" autocomplete="off" placeholder="مثلاً: K7M2QX" style="text-transform:uppercase"><span class="tiny">الرمز بيلاقيه الطالب بصفحة «حسابي». بتقدر تضيفه بعدين.</span></div>`:""}
       ${AUTH.err?`<div class="err" role="alert">${esc(AUTH.err)}</div>`:""}
@@ -724,7 +722,6 @@ function vAuth(role){
   </div></section>`;
   app.querySelectorAll(".segtabs button").forEach(b=>b.onclick=()=>{AUTH.mode=b.dataset.m;AUTH.err="";vAuth(role);});
   app.querySelectorAll(".picks button").forEach(b=>b.onclick=()=>{$("#nick").value=b.dataset.p;});
-  bindGradePick(app,g=>{AUTH.grade=g;});
   app.querySelectorAll(".av").forEach(b=>b.onclick=()=>{AUTH.av=b.dataset.av;app.querySelectorAll(".av").forEach(x=>x.setAttribute("aria-checked",String(x===b)));app.querySelector(".avatar-md").innerHTML=avatar(AUTH.av);beep("pop");});
   $("#pwshow").onclick=()=>{const p=$("#pw");p.type=p.type==="password"?"text":"password";$("#pwshow").textContent=p.type==="password"?"إظهار":"إخفاء";};
   $("#af").addEventListener("submit",async e=>{
@@ -735,7 +732,7 @@ function vAuth(role){
     if(!id)return fail("اكتب إيميل صحيح أو رقم جوال (9 أرقام أو أكثر).");
     if(pw.length<6)return fail("كلمة السر لازم تكون 6 أحرف أو أكثر.");
     let nick="";
-    if(signup&&isS){nick=keep.nick.trim();if(!nick)return fail("اختار اسم مستعار.");if(!AUTH.grade)return fail("اختار صفك.");}
+    if(signup&&isS){nick=keep.nick.trim();if(!nick)return fail("اختار اسم مستعار.");}
     AUTH.busy=true;
     const sb=app.querySelector('#af button[type="submit"]');if(sb){sb.disabled=true;sb.textContent="لحظة…";}
     let r;
@@ -745,7 +742,6 @@ function vAuth(role){
     }catch(err){console.error(err);r={ok:false,err:"ما قدرنا نوصل للخادم. تأكد من الإنترنت وجرّب مرة ثانية."};}
     if(!r||!r.ok)return fail(r&&r.err||"صار خطأ.");
     AUTH.busy=false;AUTH.err="";PV.kids=null;PV.err="";
-    if(signup&&role==="student"&&AUTH.grade){const pr=Store.progress();if(pr){pr.grade=AUTH.grade;Store.save();}AUTH.grade=0;}
     if(signup){AUTH.mode="login";beep("win");const u=ME();toast(r.warn?r.warn:(role==="student"?"أهلاً "+u.nick+"! حسابك جاهز":"حسابك جاهز"));}
     else beep("ding");
     const target=role==="student"?"#home":"#parent";
@@ -777,7 +773,6 @@ function vMe(){
   app.innerHTML=`<section class="view">
     <div class="card" style="display:grid;gap:16px">
       <div class="kidhead"><span class="avatar-lg">${avatar(u.avatar)}</span><div class="grow"><p class="eyebrow">حسابي</p><h2>${esc(u.nick)}</h2><p class="small muted">${gradeOf(S)?"الصف "+gradeLv(gradeOf(S)).short:"لسا ما اخترت صفك"}</p></div></div>
-      <div class="field"><span style="font-weight:800">صفي</span>${gradePick(gradeOf(S))}</div>
       <div class="field"><label for="nick2">اسم مستعار</label><input id="nick2" maxlength="16" value="${esc(u.nick)}"></div>
       <div class="field"><span style="font-weight:800">شخصيتي</span><div class="avs" role="radiogroup" aria-label="الشخصيات">${AVATARS.map(a=>`<button type="button" class="av" role="radio" aria-checked="${u.avatar===a.id}" data-av="${a.id}">${avatar(a.id)}<span>${a.name}</span></button>`).join("")}</div></div>
       <div><button class="btn btn-go btn-sm" id="saveme" type="button">احفظ</button></div>
@@ -792,12 +787,10 @@ function vMe(){
       <div class="row"><button class="btn btn-line btn-sm" id="lo" type="button">تسجيل خروج</button><button class="btn btn-line btn-sm" id="del" type="button">${Store.mode==="local"?"احذف حسابي من هاد الجهاز":"احذف حسابي نهائياً"}</button></div>
     </div>
   </section>`;
-  let av=u.avatar,gr=gradeOf(S);
-  bindGradePick(app,g=>{gr=g;});
+  let av=u.avatar;
   app.querySelectorAll(".av").forEach(b=>b.onclick=()=>{av=b.dataset.av;app.querySelectorAll(".av").forEach(x=>x.setAttribute("aria-checked",String(x===b)));beep("pop");});
   $("#saveme").onclick=async()=>{const n=$("#nick2").value.trim();if(!n){toast("اكتب اسم مستعار");return;}const r=await Store.updateMe({nick:n.slice(0,16),avatar:av});if(!r.ok){toast("ما انحفظ: "+r.err);return;}
-    const moved=gr&&gr!==gradeOf(S);if(gr){S.grade=gr;save();}
-    renderNav();vMe();toast(moved&&S.diag?"انحفظ. غيّرت صفك، فالعب التشخيص من جديد عشان يتحدّث مسارك.":"انحفظ");};
+    renderNav();vMe();toast("انحفظ");};
   if(Store.refreshParents)Store.refreshParents().then(n=>{const el=$("#pcount");if(el)el.textContent=pcText(n);}).catch(()=>{});
   $("#cpy").onclick=()=>{const t=u.code;if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(()=>toast("انسخ الرمز"),()=>selectText($("#code")));else selectText($("#code"));};
   $("#lo").onclick=logout;
@@ -869,10 +862,15 @@ function mountWidget(q,host,o){
   if(q.type==="type"){
     host.innerHTML=`<div class="ansbox">
       <input id="ans" class="ans" type="text" aria-label="اكتب جوابك" inputmode="none" dir="${AR_MATH?"rtl":"ltr"}" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="اكتب جوابك من اللوحة تحت" ${o.locked?"disabled":""}>
+      <p class="anspv" hidden><span class="tiny">جوابك بشكل الكتاب:</span> <span class="m" id="anspv"></span></p>
       ${padHTML({letters:[...new Set(String(q.stem).match(/[a-z]/g)||[])],small:true,locked:o.locked})}
     </div>`;
     const inp=$("#ans",host);inp.value=arMath(o.init||"");
-    const sync=()=>o.onChange&&o.onChange(!!inp.value.trim());
+    /* a fraction, power or root typed as text («٤/٥») is shown again under the box the way the book writes it */
+    const pv=host.querySelector(".anspv"),showPv=()=>{const v=inp.value.trim();const on=/[\/²³√]/.test(v);pv.hidden=!on;
+      if(on)$("#anspv",host).innerHTML=mathify(v.replace(/[\u0621-\u064A]/g,c=>LAT_VAR[c]||c).replace(/[٠-٩٫]/g,c=>AR_DIG[c]));};
+    const sync=()=>{showPv();o.onChange&&o.onChange(!!inp.value.trim());};
+    showPv();
     /* what the student types turns into school notation as they type (1 → ١, x → س);
        skipped while a phone keyboard is still composing a word */
     const local=()=>{const v=inp.value,nv=arMath(v);if(nv!==v){const s=inp.selectionStart,e=inp.selectionEnd;inp.value=nv;try{inp.setSelectionRange(s,e);}catch(_){}}};
@@ -952,44 +950,36 @@ function tiltFor(q,val){
 }
 
 /* ---------- diagnosis game ----------
-   Starts with the skills of the student's grade. A right first answer marks the skill «mastered» and
-   every skill it builds on (all the way down) «assumed». A wrong first answer gets a second question;
-   wrong again = «gap», and the skills it builds on are queued and tested next (highest grade first),
-   so only the branches with a problem go down. At most DIAG_MAX questions; skills not reached stay
-   «untested» and are in the path. */
-const DIAG_MAX=20;
+   18 fixed puzzles, from grade 1 up to grade 7, one question per skill:
+   grades 1–3 → the four grade-3 skills (they build on grades 1 and 2) · grades 4–6 → every skill (10) · grade 7 → every skill (4).
+   Right = «mastered»; wrong or «مش عارف» = «gap». A grade 1–2 skill that was not asked counts as «assumed» when a
+   grade-3 skill built on it was right (not through a skill that was wrong); otherwise it stays «untested» and is in the path. */
+const DIAG_PLAN=SKILLS.filter(s=>LV[s.lv].g>=3).map(s=>s.id);
 let G=null;
 function setQ(id){G.q=qById[id];G.w=null;}
-const SK_ORDER=Object.fromEntries(SKILLS.map((s,i)=>[s.id,i]));
-function nextDiagSkill(){
-  const c=[...new Set(G.queue)].filter(id=>!G.res[id]&&!G.assumed.has(id));
-  c.sort((a,b)=>LV[skillById[b].lv].g-LV[skillById[a].lv].g||SK_ORDER[a]-SK_ORDER[b]);
-  return c[0]||null;
-}
 function startGame(){
-  const g=gradeOf(S),L=gradeLv(g);if(!L)return vPlay();
-  G={grade:g,queue:SK_LV[L.id].slice(),res:{},assumed:new Set(),stage:"first",asked:[],pending:[],trail:[],inter:null,lv:null,prev:null};
+  G={plan:DIAG_PLAN.slice(),i:-1,res:{},asked:[],pending:[],trail:[],inter:null,lv:null,prev:null,grade:gradeOf(S)};
   goNext(true);
   if(window.claude&&claude.use)claude.use("permissions").then(p=>p&&p.request(["sample"])).catch(()=>{});
 }
 function goNext(first){
-  const sid=G.asked.length>=DIAG_MAX?null:nextDiagSkill();
-  if(!sid)return endGame();
+  G.i++;const sid=G.plan[G.i];if(!sid)return endGame();
   const lv=skillById[sid].lv,prev=G.lv;
-  G.stage="first";setQ(DIAG_PICK[sid][0]);
+  setQ(DIAG_PICK[sid][0]);
+  /* the first island covers grades 1–3 */
+  if(first)LEVELS.filter(l=>l.g<LV[lv].g).forEach(l=>G.trail.push(l.id));
   if(!G.trail.includes(lv))G.trail.push(lv);
   G.lv=lv;
-  if(!first&&prev&&prev!==lv){G.prev=prev;G.inter=LV[lv].g>LV[prev].g?"up":"down";return drawInterlude();}
+  if(!first&&prev!==lv){G.prev=prev;G.inter="up";return drawInterlude();}
   drawGame();
 }
-function setRes(sid,st){
-  G.res[sid]=st;
-  /* a right answer vouches for what it builds on, but not through a skill already found weak */
-  if(st==="mastered"){const seen=new Set(),stack=[...preOf(sid)];while(stack.length){const x=stack.pop();if(seen.has(x))continue;seen.add(x);
-    if(G.res[x]==="gap"||G.res[x]==="partial")continue;if(!G.res[x])G.assumed.add(x);stack.push(...preOf(x));}}
-  if(st==="gap")preOf(sid).forEach(x=>{if(!G.res[x]&&!G.assumed.has(x))G.queue.push(x);});
+/* what the right answers vouch for: every skill below a right one, but not through a skill that was wrong */
+function vouched(res){
+  const out=new Set();
+  Object.keys(res).filter(id=>res[id]==="mastered").forEach(id=>{const seen=new Set(),stack=[...preOf(id)];
+    while(stack.length){const x=stack.pop();if(seen.has(x))continue;seen.add(x);if(res[x]&&res[x]!=="mastered")continue;if(!res[x])out.add(x);stack.push(...preOf(x));}});
+  return out;
 }
-function followUp(sid){const asked=new Set(G.asked.map(a=>a.qid));return [DIAG_PICK[sid][1],...QS.filter(x=>x.skill===sid).sort((a,b)=>a.d-b.d).map(x=>x.id)].find(id=>id&&!asked.has(id))||null;}
 function record(val,skipped){
   const q=G.q;let r,a;
   if(skipped){r={ok:false,mis:null,src:"skip"};a="(مش عارف)";}else{r=grade(q,val);a=answerText(q,val);}
@@ -997,15 +987,8 @@ function record(val,skipped){
   G.asked.push(entry);
   if(!r.ok&&r.mis&&r.src==="match")bump(r.mis);
   if(!r.ok&&r.src==="ai"){if(sampleFn)G.pending.push(aiDiagnose(entry,q));else entry.src="none";}
-  const sid=q.skill;
-  if(G.stage==="first"){
-    if(r.ok){setRes(sid,"mastered");return goNext();}
-    /* «مش عارف» is a clear answer: no second question (that one is for a careless slip) */
-    if(skipped){setRes(sid,"gap");return goNext();}
-    const f=followUp(sid);if(!f){setRes(sid,"gap");return goNext();}
-    G.stage="follow";setQ(f);return drawGame();
-  }
-  setRes(sid,r.ok?"partial":"gap");return goNext();
+  G.res[q.skill]=r.ok?"mastered":"gap";
+  return goNext();
 }
 function islandsHTML(){
   const g=G?G.grade:gradeOf(S);
@@ -1049,30 +1032,19 @@ function drawGame(){
 }
 function vPlay(){
   if(G)return drawGame();
-  const g=gradeOf(S);
-  if(!g){
-    app.innerHTML=`<section class="game"><div class="card" style="display:grid;gap:14px">
-      <p class="eyebrow">أهلاً ${esc(ME().nick)}</p>
-      <h2>قبل ما نبلّش: بأي صف إنت هلأ؟</h2>
-      <p class="muted">بنبلّش التشخيص بمهارات صفك، وبنرجع للمهارات اللي قبلها إذا احتجنا.</p>
-      ${gradePick(0)}
-    </div></section>`;
-    bindGradePick(app,n=>{S.grade=n;save();setTimeout(vPlay,180);});
-    return;
-  }
-  const L=gradeLv(g);
+  const n=DIAG_PLAN.length,low=DIAG_PLAN.filter(id=>LV[skillById[id].lv].g<=3).length,mid=DIAG_PLAN.filter(id=>{const g=LV[skillById[id].lv].g;return g>=4&&g<=6;}).length;
   app.innerHTML=`<section class="game"><div class="card" style="display:grid;gap:14px">
     <p class="eyebrow">أهلاً ${esc(ME().nick)}</p>
     <h2>رحلة الفوانيس</h2>
-    <p class="muted">بنبلّش بمهارات <b>الصف ${L.short}</b>. إذا جاوبت صح بنعرف إنك ماسك المهارات اللي بتعتمد عليها. وإذا غلطت، بنرجع جزيرة لورا نتأكد من الأساس اللي بتعتمد عليه، بس بالمهارات اللي فيها مشكلة.</p>
+    <p class="muted">رحلتك بتطلع من جزيرة الأول لجزيرة السابع: ${arNum(low)} ألغاز من الصفوف الأولى، و${arNum(mid)} ألغاز من الرابع للسادس، و${arNum(n-low-mid)} ألغاز من السابع. ومن أجوبتك بنعرف الفجوات وبنبني مسارك.</p>
     ${islandsHTML()}
     <div class="row" style="justify-content:center;gap:8px">${Object.keys(TYPE_NAME).map(t=>`<span class="chip calm"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${TYPE_IC[t]}</svg>${TYPE_NAME[t]}</span>`).join("")}</div>
     <ul class="muted small" style="margin:0;padding-inline-start:1.2em">
-      <li>عدد الألغاز بيختلف حسب أجوبتك، وما بيزيد عن ${arNum(DIAG_MAX)} لغز تقريباً.</li>
-      <li>ما في وقت ولا علامات. الهدف نلاقي الفجوات ونبني مسارك عليها.</li>
+      <li>${arNum(n)} لغز، لغز واحد لكل مهارة.</li>
+      <li>ما في وقت ولا علامات. إذا ما بتعرف الجواب اكبس «مش عارف»، ورح نتعلّمها سوا بالمسار.</li>
       <li>نبراس (ذكاء اصطناعي) بيحلل أجوبتك الغلط عشان يعرف <b>ليش</b> صارت، وبيكتبلك تقرير بالآخر.</li>
     </ul>
-    <div class="row"><button class="btn btn-go" id="go" type="button">${S.diag?"العب من جديد":"يلا نلعب"}</button>${S.diag?`<a class="btn btn-line" href="#result">نتيجتي السابقة</a>`:""}<a class="btn btn-line btn-sm" href="#me">مش صفك؟ غيّره</a></div>
+    <div class="row"><button class="btn btn-go" id="go" type="button">${S.diag?"العب من جديد":"يلا نلعب"}</button>${S.diag?`<a class="btn btn-line" href="#result">نتيجتي السابقة</a>`:""}</div>
   </div></section>`;
   $("#go").onclick=startGame;
 }
@@ -1082,8 +1054,8 @@ async function endGame(){
     app.innerHTML=`<section class="game"><div class="card interlude">${LANTERN("big on")}<h2>نبراس بيقرأ إجاباتك…</h2><p class="muted">ثواني وبيطلعلك مسارك.</p></div></section>`;
     await Promise.allSettled(g.pending);
   }
-  const skills={};
-  for(const s of pathOf(S))skills[s.id]=g.res[s.id]||(g.assumed.has(s.id)?"assumed":"untested");
+  const skills={},ok=vouched(g.res);
+  for(const s of pathOf(S))skills[s.id]=g.res[s.id]||(ok.has(s.id)?"assumed":"untested");
   const mis={};g.asked.forEach(a=>{if(!a.ok&&a.mis)mis[a.mis]=(mis[a.mis]||0)+1;});
   const start=pathOf(S).find(s=>!["mastered","assumed"].includes(skills[s.id]));
   S.diag={v:2,grade:g.grade,at:new Date().toISOString(),skills,lvPass:{},trail:g.trail,start:start?start.id:null,mis,count:g.asked.length,
@@ -1129,8 +1101,8 @@ const SRC={math:"تحقق حسابي",match:"مطابقة مع مكتبة الأ
 const REP={busy:false,text:"",ctl:null,fail:null};
 function reportPrompt(d,start,nick){
   const ans=(d.answers||[]).map(a=>{const q=qById[a.qid];return `- [${q?skillById[q.skill].title:""}] ${q?arProse(q.stem):a.qid} | جواب الطالب: ${arProse(a.a)} | ${a.ok?"صحيح":"خطأ"}${a.mis?` | الخطأ المفاهيمي: ${misById[a.mis].title}`:""}${a.why?` | ملاحظة: ${a.why}`:""}`;}).join("\n");
-  const gl=gradeLv(d.grade)||LV.L7;
-  return `أنت «نبراس»، معلم رياضيات فلسطيني دافئ. اكتب لطالب في الصف ${gl.short} (اسمه المستعار: ${nick}) تقريراً قصيراً عن نتيجة لعبة التشخيص التي أنهاها الآن. اللعبة تبدأ بمهارات صفه، وعند الخطأ ترجع إلى المهارات السابقة التي تعتمد عليها المهارة لتحديد الفجوات.
+  const gl=LV.L7;
+  return `أنت «نبراس»، معلم رياضيات فلسطيني دافئ. اكتب لطالب في الصف ${gl.short} (اسمه المستعار: ${nick}) تقريراً قصيراً عن نتيجة لعبة التشخيص التي أنهاها الآن. اللعبة تسأل سؤالاً واحداً لكل مهارة، من الصف الأول حتى السابع، لتحديد الفجوات.
 
 القواعد:
 - لهجة فلسطينية بسيطة ومشجّعة، من 60 إلى 100 كلمة، فقرتان قصيرتان، بدون عناوين أو قوائم.
