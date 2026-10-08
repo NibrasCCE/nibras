@@ -875,3 +875,10 @@ body.wide .top{background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-
 .qrev{display:grid;gap:6px;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface)}
 .qrev .stem{margin:0;font-size:1rem}
 .skgrade-row{align-items:center}
+
+/* path lock: a station opens only after the ones before it are lit */
+.stop.locked{cursor:not-allowed}
+.stop.locked .info{background:var(--surface-2,var(--surface));opacity:.72}
+.stop.locked:hover .info{border-color:var(--line)}
+.stop.locked .orb svg.ln{opacity:.45}
+.orb svg.lk{position:absolute;width:24px;height:24px;inset-inline-end:-4px;bottom:-4px;padding:3px;border-radius:50%;background:var(--surface);border:2px solid var(--line);color:var(--ink-3)}

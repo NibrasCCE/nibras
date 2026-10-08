@@ -26,7 +26,7 @@ const quizOf=(p,sid)=>(p.quiz||{})[sid]||null;
 const STAR=on=>`<svg class="star${on?" on":""}" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2l-5.7 3.1 1.2-6.4L2.8 9.5l6.4-.8z"/></svg>`;
 const starsHTML=k=>`<span class="stars" role="img" aria-label="${k} من 3 نجوم">${[1,2,3].map(i=>STAR(i<=k)).join("")}</span>`;
 const gradeChip=k=>`<span class="chip ${GRADES[k][1]}">${GRADES[k][0]}</span>`;
-const DIAG_PICK={s5a:["q5a1","q5a2"],s5b:["q5b1","q5b2"],s5c:["q5c1","q5c2"],s6a:["q6a2","q6a1"],s6b:["q6b2","q6b1"],s6c:["q6c2","q6c1"],s7a:["q7a2","q7a1"],s7b:["q7b1","q7b2"],s7c:["q7c2","q7c1"],s7d:["q7d2","q7d5"]};
+const DIAG_PICK={s4a:["q4a1","q4a3"],s4b:["q4b2","q4b1"],s4c:["q4c1","q4c3"],s4d:["q4d2","q4d1"],s5a:["q5a1","q5a2"],s5b:["q5b1","q5b2"],s5c:["q5c1","q5c2"],s6a:["q6a2","q6a1"],s6b:["q6b2","q6b1"],s6c:["q6c2","q6c1"],s7a:["q7a2","q7a1"],s7b:["q7b1","q7b2"],s7c:["q7c2","q7c1"],s7d:["q7d2","q7d5"]};
 const LET=["أ","ب","ج","د"];
 const DAILY_LIMIT=30, MASTER_STREAK=3;
 
@@ -381,11 +381,28 @@ function parseIdent(raw){
 
 /* ---------- learning state helpers ---------- */
 function bump(mid){if(S&&misById[mid])S.detected[mid]=(S.detected[mid]||0)+1;}
-const statusOf=(p,sid)=>p.diag?p.diag.skills[sid]:null;
+/* a level the diagnosis did not reach counts as "assumed" (ثابتة) when a higher grade level was passed.
+   This also covers diagnoses saved before a grade was added (e.g. grade 4). */
+const assumedBy=(lvPass,lv)=>Object.entries(lvPass||{}).some(([l,ok])=>ok&&LV[l]&&LV[l].g>LV[lv].g);
+const stOf=(d,sid)=>d.skills[sid]||(assumedBy(d.lvPass,skillById[sid].lv)?"assumed":"untested");
+const statusOf=(p,sid)=>p.diag?stOf(p.diag,sid):null;
 const isLitP=(p,sid)=>!!p.lit[sid]||["mastered","assumed"].includes(statusOf(p,sid));
 const isLit=sid=>isLitP(S,sid);
 const currentSkillP=p=>SKILLS.find(s=>!isLitP(p,s.id))||null;
 const currentSkill=()=>currentSkillP(S);
+/* the path opens one station at a time: a skill opens only when it is lit, or it is the next station
+   (every skill before it in the path is lit). */
+const canOpen=id=>{const c=currentSkill();return !c||isLit(id)||c.id===id;};
+function vLocked(sid){
+  const c=currentSkill(),sk=skillById[sid];
+  app.innerHTML=`<section class="view"><div class="card locked" style="display:grid;gap:12px">
+    <div class="row between"><a class="btn btn-line btn-sm" href="#path">← مساري</a><span class="chip plain">مقفلة</span></div>
+    <p class="eyebrow">${LV[sk.lv].name} · مهارة ${skNum(sid)}</p>
+    <h2><span class="sknum">${skNum(sid)}</span>${esc(sk.title)}</h2>
+    <p class="muted">${S.diag?`هالمهارة لسا مقفلة. بتنفتح لما تخلّص المحطات اللي قبلها. محطتك هلأ: <b>${skNum(c.id)} ${esc(c.title)}</b>.`:"هالمهارة لسا مقفلة. العب رحلة الفوانيس أول عشان نعرف من وين تبلّش."}</p>
+    <div>${S.diag?`<a class="btn btn-go" href="#skill-${c.id}">روح لمحطتك</a>`:`<a class="btn btn-go" href="#play">ابدأ اللعبة</a>`}</div>
+  </div></section>`;
+}
 const litCount=(p,lv)=>(lv?SK_LV[lv]:SKILLS.map(s=>s.id)).filter(id=>isLitP(p,id)).length;
 const STATUS={mastered:["متمكّن","lit"],assumed:["ثابتة","good"],partial:["بدها تقوية","calm"],gap:["رح نشتغل عليها","calm"],untested:["لسا ما وصلناها","plain"]};
 const fmtDate=iso=>{try{return new Date(iso).toLocaleDateString("ar-PS-u-nu-latn",{day:"numeric",month:"long"});}catch(e){return String(iso).slice(0,10);}};
@@ -399,8 +416,8 @@ function composeMsg0(stu,kind,extra,ch){
   const lines=[];let subject="";
   if(kind==="diag"&&d){
     const start=d.start?skillById[d.start]:null;
-    const good=SKILLS.filter(s=>d.skills[s.id]==="mastered").map(s=>s.title);
-    const weak=SKILLS.filter(s=>["partial","gap"].includes(d.skills[s.id])).map(s=>s.title);
+    const good=SKILLS.filter(s=>stOf(d,s.id)==="mastered").map(s=>s.title);
+    const weak=SKILLS.filter(s=>["partial","gap"].includes(stOf(d,s.id))).map(s=>s.title);
     const ideas=Object.keys(d.mis||{}).map(id=>misById[id].title);
     subject=`نبراس · تقرير التشخيص الأولي لـ ${nick}`;
     if(ch==="sms")return{subject,body:`نبراس: ${nick} خلّص التشخيص الأولي. ${start?`البداية من «${start.title}» (${LV[start.lv].name}).`:"متمكّن من كل المهارات المختبرة."} التفاصيل بصفحة الأهالي.`};
@@ -512,8 +529,8 @@ function render(){
   if(!u){if(r==="auth-student")return vAuth("student");if(r==="auth-parent")return vAuth("parent");return vLanding();}
   if(u.role==="parent")return vParent();
   if(u.role==="teacher"){if(r!=="ask"){location.hash="#ask";return;}return vAsk();} /* guest teacher: chat only */
-  if(r.startsWith("skill-")&&skillById[r.slice(6)])return vSkill(r.slice(6));
-  if(r.startsWith("quiz-")&&skillById[r.slice(5)])return vQuiz(r.slice(5));
+  if(r.startsWith("skill-")&&skillById[r.slice(6)])return canOpen(r.slice(6))?vSkill(r.slice(6)):vLocked(r.slice(6));
+  if(r.startsWith("quiz-")&&skillById[r.slice(5)])return canOpen(r.slice(5))?vQuiz(r.slice(5)):vLocked(r.slice(5));
   ({home:vHome,play:vPlay,result:vResult,path:vPath,ask:vAsk,me:vMe}[r]||vHome)();
 }
 window.addEventListener("hashchange",()=>{if(G&&route()!=="play")G=null;if(P&&!route().startsWith("skill-"))P=null;if(QZ&&!route().startsWith("quiz-"))QZ=null;render();window.scrollTo(0,0);});
@@ -606,7 +623,7 @@ function vLanding(){
           <p class="nb-price"><b>21</b><span>₪</span><small>شهريًا لكل طالب<br>(حوالي 6.89 دولار)</small></p>
           <ul>
             <li>رحلة التشخيص كاملة على الجزر الثلاث</li>
-            <li>مسار التعلّم بالمهارات العشر، من الصف الخامس إلى السابع</li>
+            <li>مسار التعلّم بمهارات من الصف ${LEVELS[0].short} إلى ${LEVELS[LEVELS.length-1].short}، محطة ورا محطة</li>
             <li>«اسأل نبراس» حتى ${DAILY_LIMIT} رسالة يوميًا</li>
             <li>صفحة الأهالي مع تقرير التشخيص وإشعار عند كل مرحلة</li>
           </ul>
@@ -725,7 +742,7 @@ function vHome(){
     <div class="hero">
       <span class="avatar-lg">${avatar(u.avatar)}</span>
       <h1>أهلاً ${esc(u.nick)}!</h1>
-      <p class="lead">${d?(cur?`محطتك الجاية: <b style="color:var(--logo)">${esc(cur.title)}</b> (${LV[cur.lv].name}).`:"ضوّيت كل الفوانيس! جرّب تتحدّى حالك مع نبراس."):"خلينا نكتشف مستواك بلعبة قصيرة: 3 جزر، وألغاز بتتغيّر حسب جوابك."}</p>
+      <p class="lead">${d?(cur?`محطتك الجاية: <b style="color:var(--logo)">${esc(cur.title)}</b> (${LV[cur.lv].name}).`:"ضوّيت كل الفوانيس! جرّب تتحدّى حالك مع نبراس."):"خلينا نكتشف مستواك بلعبة قصيرة: ${arNum(LEVELS.length)} جزر، وألغاز بتتغيّر حسب جوابك."}</p>
       <div class="row" style="justify-content:center">
         <a class="btn btn-go" href="#${d?(cur?"skill-"+cur.id:"path"):"play"}">${d?"كمّل رحلتك":"ابدأ اللعبة"}</a>
         <a class="btn btn-line" href="#ask">اسأل نبراس</a>
@@ -940,7 +957,13 @@ function nextSkill(){
   G.si++;G.stage="first";
   if(G.si<G.skills.length){setQ(DIAG_PICK[G.skills[G.si]][0]);return drawGame();}
   const n=G.skills.filter(s=>G.res[s]==="mastered").length,pass=n>=LV[G.lv].need;G.lvPass[G.lv]=pass;
-  if(G.lv==="L6"){const nx=pass?"L7":"L5";G.lv=nx;G.skills=SK_LV[nx];G.si=0;G.trail.push(nx);setQ(DIAG_PICK[G.skills[0]][0]);G.inter=pass?"up":"down";return drawInterlude();}
+  /* start at grade 6: pass -> grade 7 and stop; fail -> go down one grade at a time until a level is passed
+     or the lowest level is done. */
+  const li=LEVELS.findIndex(l=>l.id===G.lv);let nx=null;
+  if(G.lv==="L6")nx=pass?"L7":(LEVELS[li-1]||{}).id;
+  else if(LV[G.lv].g<6&&!pass)nx=(LEVELS[li-1]||{}).id;
+  nx=nx&&SK_LV[nx]&&SK_LV[nx].length?nx:null;
+  if(nx){G.prev=G.lv;G.lv=nx;G.skills=SK_LV[nx];G.si=0;G.trail.push(nx);setQ(DIAG_PICK[G.skills[0]][0]);G.inter=LV[nx].g>LV[G.prev].g?"up":"down";return drawInterlude();}
   return endGame();
 }
 function islandsHTML(){
@@ -951,7 +974,7 @@ function drawInterlude(){
   const l=LV[G.lv];beep("win");
   app.innerHTML=`<section class="game">${islandsHTML()}
     <div class="card interlude">${LANTERN("big on")}
-      <h2>خلّصت جزيرة الصف السادس!</h2>
+      <h2>خلّصت جزيرة الصف ${LV[G.prev||"L6"].short}!</h2>
       <p class="muted">${G.inter==="up"?`يلا نطلع على <b>جزيرة ${l.short}</b> ونشوف قديش بتعرف.`:`هلأ رح نزور <b>جزيرة ${l.short}</b> نتأكد من الأساسيات، عشان نبني عليها صح.`}</p>
       <button class="btn btn-go" id="goon" type="button">يلا</button>
     </div></section>`;
@@ -987,11 +1010,11 @@ function vPlay(){
   app.innerHTML=`<section class="game"><div class="card" style="display:grid;gap:14px">
     <p class="eyebrow">أهلاً ${esc(ME().nick)}</p>
     <h2>رحلة الفوانيس</h2>
-    <p class="muted">رحلتك فيها 3 جزر: جزيرة الخامس، والسادس، والسابع. بنبلّش من جزيرة السادس، وحسب أجوبتك بنطلع لجزيرة السابع أو بننزل لجزيرة الخامس.</p>
+    <p class="muted">رحلتك فيها ${arNum(LEVELS.length)} جزر: ${LEVELS.map(l=>"جزيرة "+l.short).join("، ")}. بنبلّش من جزيرة السادس: إذا مشيت فيها منيح بنطلع لجزيرة السابع، وإذا صعبت عليك بننزل جزيرة جزيرة لتحت لحد ما نلاقي من وين تبلّش.</p>
     <div class="islands" aria-hidden="true">${LEVELS.map((l,i)=>`${i?'<span class="isle-link"></span>':""}<div class="isle ${l.id==="L6"?"now":""}"><span class="dot">${l.g}</span><small>${l.short}</small></div>`).join("")}</div>
     <div class="row" style="justify-content:center;gap:8px">${Object.keys(TYPE_NAME).map(t=>`<span class="chip calm"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${TYPE_IC[t]}</svg>${TYPE_NAME[t]}</span>`).join("")}</div>
     <ul class="muted small" style="margin:0;padding-inline-start:1.2em">
-      <li>تقريباً 8 لـ 12 لغز، وبتاخد حوالي 10 دقايق.</li>
+      <li>عدد الألغاز بيتغيّر حسب أجوبتك: تقريباً من 7 لـ 20 لغز، وبتاخد حوالي 10 لـ 15 دقيقة.</li>
       <li>ما في وقت ولا علامات. الهدف نعرف من وين نبلّش.</li>
       <li>نبراس (ذكاء اصطناعي) بيحلل أجوبتك الغلط عشان يعرف <b>ليش</b> صارت، وبيكتبلك تقرير بالآخر.</li>
     </ul>
@@ -1006,7 +1029,7 @@ async function endGame(){
     await Promise.allSettled(g.pending);
   }
   const skills={};
-  for(const s of SKILLS)skills[s.id]=g.res[s.id]||(s.lv==="L5"&&g.lvPass.L6?"assumed":"untested");
+  for(const s of SKILLS)skills[s.id]=g.res[s.id]||(assumedBy(g.lvPass,s.lv)?"assumed":"untested");
   const mis={};g.asked.forEach(a=>{if(!a.ok&&a.mis)mis[a.mis]=(mis[a.mis]||0)+1;});
   const start=SKILLS.find(s=>!["mastered","assumed"].includes(skills[s.id]));
   S.diag={at:new Date().toISOString(),skills,lvPass:g.lvPass,trail:g.trail,start:start?start.id:null,mis,count:g.asked.length,
@@ -1052,7 +1075,7 @@ const SRC={math:"تحقق حسابي",match:"مطابقة مع مكتبة الأ
 const REP={busy:false,text:"",ctl:null,fail:null};
 function reportPrompt(d,start,nick){
   const ans=(d.answers||[]).map(a=>{const q=qById[a.qid];return `- [${q?skillById[q.skill].title:""}] ${q?arProse(q.stem):a.qid} | جواب الطالب: ${arProse(a.a)} | ${a.ok?"صحيح":"خطأ"}${a.mis?` | الخطأ المفاهيمي: ${misById[a.mis].title}`:""}${a.why?` | ملاحظة: ${a.why}`:""}`;}).join("\n");
-  return `أنت «نبراس»، معلم رياضيات فلسطيني دافئ. اكتب لطالب في الصف السابع (اسمه المستعار: ${nick}) تقريراً قصيراً عن نتيجة لعبة التشخيص التي أنهاها الآن. اللعبة تختبر مهارات من الصف الخامس والسادس والسابع.
+  return `أنت «نبراس»، معلم رياضيات فلسطيني دافئ. اكتب لطالب في الصف السابع (اسمه المستعار: ${nick}) تقريراً قصيراً عن نتيجة لعبة التشخيص التي أنهاها الآن. اللعبة تختبر مهارات من الصف الرابع حتى السابع.
 
 القواعد:
 - لهجة فلسطينية بسيطة ومشجّعة، من 60 إلى 100 كلمة، فقرتان قصيرتان، بدون عناوين أو قوائم.
@@ -1061,7 +1084,7 @@ function reportPrompt(d,start,nick){
 - اختم بجملة أننا سنبدأ معاً من مهارة «${start?start.title:"التحدي مع نبراس"}».
 - لا تذكر أي معلومة غير موجودة في البيانات. ${AR_MATH?"اكتب أي تعبير رياضي كنص عادي بترميز الكتاب المدرسي كما في البيانات: الأرقام ٠١٢٣٤٥٦٧٨٩ والمتغيرات بحروف عربية، مثل ٣س + ٦، بدون LaTeX وبدون علامة الدولار.":"اكتب أي تعبير رياضي بين علامتي $ مثل $3x + 6$."}
 
-حالة المهارات: ${SKILLS.map(s=>`${s.title} (${LV[s.lv].short}) = ${STATUS[d.skills[s.id]][0]}`).join("؛ ")}
+حالة المهارات: ${SKILLS.map(s=>`${s.title} (${LV[s.lv].short}) = ${STATUS[stOf(d,s.id)][0]}`).join("؛ ")}
 إجابات الطالب:
 ${ans}`;
 }
@@ -1073,9 +1096,10 @@ function genReport(d,start){
     .catch(e=>{if(e&&e.text){d.report=e.text;save();}else REP.fail=(e&&e.code)||"error";})
     .finally(()=>{REP.busy=false;if(route()==="result")vResult();});
 }
+const LOCK='<svg class="lk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
 const BULB='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>';
 function levelTable(d){
-  return `<div class="lvgrid">${LEVELS.map(l=>`<div class="lvbox"><h4>${l.name}</h4>${SK_LV[l.id].map(id=>{const st=d.skills[id],now=d.start===id;
+  return `<div class="lvgrid">${LEVELS.map(l=>`<div class="lvbox"><h4>${l.name}</h4>${SK_LV[l.id].map(id=>{const st=stOf(d,id),now=d.start===id;
     return `<div class="sk"><span>${esc(skillById[id].title)}</span><span class="chip ${now?"lit":STATUS[st][1]}">${now?"البداية من هون":STATUS[st][0]}</span></div>`;}).join("")}</div>`).join("")}</div>`;
 }
 function vResult(){
@@ -1124,12 +1148,13 @@ function vPath(){
     ${LEVELS.map(l=>{const k=litCount(S,l.id),n=SK_LV[l.id].length;return `<div class="lvsec">
       <div class="lvhead"><h3><span class="lvnum">${l.g}</span>${l.name}</h3><span class="small muted">${k} من ${n}</span></div>
       <div class="pbar" aria-hidden="true"><i style="width:${Math.round(k/n*100)}%"></i></div>
-      <div class="trail">${SK_LV[l.id].map(id=>{const s=skillById[id],lit=isLit(id),now=cur&&cur.id===id,st=S.diag.skills[id];idx++;
-        const chip=lit?(st==="assumed"&&!S.lit[id]?["ثابتة ✦","good"]:["متقَنة ✦","lit"]):now?["أنت هنا","lit"]:(st==="partial"||st==="gap")?["بدها شغل","calm"]:["قريباً","plain"];
-        return `<a class="stop ${lit?"lit":""} ${now?"now":""}" href="#skill-${id}"><span class="orb">${LANTERN(lit?"on":"off")}</span>
+      <div class="trail">${SK_LV[l.id].map(id=>{const s=skillById[id],lit=isLit(id),now=cur&&cur.id===id,st=statusOf(S,id);idx++;
+        const chip=lit?(st==="assumed"&&!S.lit[id]?["ثابتة ✦","good"]:["متقَنة ✦","lit"]):now?["أنت هنا","lit"]:["مقفلة","plain"];
+        const open=canOpen(id),tag=open?"a":"div";
+        return `<${tag} class="stop ${lit?"lit":""} ${now?"now":""} ${open?"":"locked"}"${open?` href="#skill-${id}"`:` aria-disabled="true"`}><span class="orb">${LANTERN(lit?"on":"off")}${open?"":LOCK}</span>
           <span class="info"><span class="row between" style="gap:8px"><b><span class="sknum">${skNum(id)}</span>${esc(s.title)}</b><span class="chip ${chip[1]}">${chip[0]}</span></span><span class="small muted">${esc(s.summary)}</span>
           <span class="tiny">${preOf(id).length?"بتعتمد على: "+preOf(id).map(x=>skNum(x)+" "+esc(skillById[x].title)).join("، "):"مهارة أساس، ما بتعتمد على مهارة قبلها"}</span>
-          ${quizOf(S,id)?`<span class="skgrade">${starsHTML(quizOf(S,id).best)}${gradeChip(quizOf(S,id).best)}</span>`:""}<span class="tiny">${esc(s.src)}</span></span></a>`;}).join("")}</div>
+          ${quizOf(S,id)?`<span class="skgrade">${starsHTML(quizOf(S,id).best)}${gradeChip(quizOf(S,id).best)}</span>`:""}<span class="tiny">${esc(s.src)}</span></span></${tag}>`;}).join("")}</div>
     </div>`;}).join("")}
     ${det.length?`<div class="card" style="display:grid;gap:10px"><h3>أفكار بنشتغل عليها</h3><div class="ideas">${det.map(([id])=>`<div class="idea">${BULB}<div><b>${esc(misById[id].title)}</b><p class="small muted">${mathify(HINT[id])}</p></div></div>`).join("")}</div></div>`:""}
     <p class="draft">محتوى تجريبي (مسودة) بانتظار مراجعة معلم رياضيات ومطابقته مع المنهاج.</p>
@@ -1171,7 +1196,7 @@ function vSkill(sid){
       <p class="eyebrow">${LV[sk.lv].name} · مهارة ${skNum(sid)}</p>
       <h2><span class="sknum">${skNum(sid)}</span>${esc(sk.title)}</h2>
       <div class="skpre"><span class="small muted">${preOf(sid).length?"قبل هالمهارة:":"مهارة أساس، ما بتعتمد على مهارة قبلها."}</span>${preOf(sid).map(x=>`<a class="chip ${isLit(x)?"lit":"plain"}" href="#skill-${x}">${skNum(x)} ${esc(skillById[x].title)}${isLit(x)?" ✦":""}</a>`).join("")}
-        ${nextOf(sid).length?`<span class="small muted">بتفتحلك:</span>${nextOf(sid).map(x=>`<a class="chip plain" href="#skill-${x}">${skNum(x)} ${esc(skillById[x].title)}</a>`).join("")}`:""}</div>
+        ${nextOf(sid).length?`<span class="small muted">بتفتحلك:</span>${nextOf(sid).map(x=>canOpen(x)?`<a class="chip plain" href="#skill-${x}">${skNum(x)} ${esc(skillById[x].title)}</a>`:`<span class="chip plain" title="مقفلة">${skNum(x)} ${esc(skillById[x].title)} · مقفلة</span>`).join("")}`:""}</div>
       ${LSN?`<div class="lsn-tabs" role="tablist" aria-label="طريقة الشرح"><button type="button" role="tab" data-lsn="watch" aria-selected="${P.read?"false":"true"}">شاهد الشرح مع نبراس</button><button type="button" role="tab" data-lsn="read" aria-selected="${P.read?"true":"false"}">اقرأ الشرح</button></div><div id="lsnhost"${P.read?" hidden":""}></div>`:""}
       <div id="xread"${LSN&&!P.read?" hidden":""}>
       ${xl>0?xlBody(sk,xl):`<p>${mathify(sk.explanation)}</p>
@@ -1431,7 +1456,7 @@ function kidCard(k){
 }
 
 
-const PROMPT=`أنت «نبراس»، معلم رياضيات افتراضي فلسطيني صبور ودافئ على منصة «نبراس · تعلّم من مستواك» لتعويض الفاقد التعليمي. تساعد طلبة الصف السابع في المدارس الحكومية بالضفة الغربية في مهارات الأعداد والكسور والنسبة والجبر، من مستوى الصف الخامس حتى السابع. تتبع منهجية التعليم حسب المستوى الفعلي (Teaching at the Right Level): تبدأ من مستوى الطالب الحقيقي، لا من مستوى صفّه.
+const PROMPT=`أنت «نبراس»، معلم رياضيات افتراضي فلسطيني صبور ودافئ على منصة «نبراس · تعلّم من مستواك» لتعويض الفاقد التعليمي. تساعد طلبة الصف السابع في المدارس الحكومية بالضفة الغربية في مهارات الأعداد والكسور والنسبة والجبر، من مستوى الصف الرابع حتى السابع. تتبع منهجية التعليم حسب المستوى الفعلي (Teaching at the Right Level): تبدأ من مستوى الطالب الحقيقي، لا من مستوى صفّه.
 
 # شخصيتك ولغتك
 - تحكي بلهجة فلسطينية بسيطة ومهذبة («يا بطل»، «يلا نجرب سوا»، «ولا يهمك»)، وتكتب المصطلحات الرياضية بالفصحى (متغير، معامل، حدود متشابهة، خاصية التوزيع، معادلة).
@@ -1478,14 +1503,14 @@ function context(){
   const d=S.diag,L=g?["# سياق الجلسة","- هذه جلسة تجريبية: الزائر معلم يختبر نبراس، وقد يكتب كأنه طالب. تصرّف تماماً كما تتصرف مع طالب في الصف السابع، بنفس طريقة التعليم والحدود.","- لا تقترح لعبة التشخيص ولا المسار، فالزائر ليس له حساب طالب.","- الصف المفترض: السابع"]
     :["# سياق الطالب",`- الاسم المستعار: ${ME().nick} (لا تطلب اسمه الحقيقي)`,"- الصف: السابع"];
   if(g){/* no diagnostic data for a guest */}
-  else if(d){L.push("- نتيجة التشخيص: "+SKILLS.map(s=>`${s.title} (${LV[s.lv].short}) = ${STATUS[d.skills[s.id]][0]}`).join("؛ "));
+  else if(d){L.push("- نتيجة التشخيص: "+SKILLS.map(s=>`${s.title} (${LV[s.lv].short}) = ${STATUS[stOf(d,s.id)][0]}`).join("؛ "));
     const c=currentSkill();L.push(`- المحطة الحالية في مساره: ${c?c.title+" ("+LV[c.lv].name+")":"أتقن كل المهارات"}`);}
   else L.push("- لم يلعب التشخيص بعد. إذا طلب مساعدة عامة اقترح عليه لعبة التشخيص بلطف.");
   const det=Object.entries(S.detected).sort((a,b)=>b[1]-a[1]).map(([id,n])=>`${id} (${n})`);
   if(det.length)L.push("- أخطاء مفاهيمية لوحظت سابقاً: "+det.join("، "));
   L.push("","# مكتبة الأخطاء المفاهيمية");
   MIS.forEach(m=>L.push(`- ${m.id}: ${m.title}. ${arProse(m.description)} مثال: ${arProse(m.example)} علاج مقترح: ${arProse(HINT[m.id])}`));
-  L.push("","# مهارات المسار (مسودة، مرتبة من الصف الخامس للسابع)");
+  L.push("","# مهارات المسار (مسودة، مرتبة من الصف الرابع للسابع)");
   SKILLS.forEach(s=>L.push(`- ${s.title} (${LV[s.lv].name}): ${arProse(s.explanation)} مثال: ${arProse(s.example)}${s.learn?" قواعد الكتاب المدرسي لهذه المهارة (التزم بطريقتها ومصطلحاتها عند الشرح): "+s.learn.map(arProse).join(" "):""}`));
   return L.join("\n");
 }

@@ -90,6 +90,38 @@ const FIG=(function(){
       if(!o.only||o.only.includes(k))g+=T(X(k),y+20,NEG(k),{size:u<16?10.5:12.5,rtl:AR,w:k===0?900:800,fill:(o.mark||[]).includes(k)?"var(--brand-text)":"var(--ink)"});}
     return{g,W,X,u};}
   const KINDS={
+    /* --- place-value board (grade 4): groups of three places, the biggest on the left as the number is written;
+       "pv:352418,4" lights the place 4 counted from the units (0 = units) --- */
+    pv(arg){const p=String(arg||"").split(","),s=String(parseInt(p[0],10));if(!/^\d{1,9}$/.test(s))return null;
+      const hi=p[1]!=null&&p[1]!==""?parseInt(p[1],10):-1,groups=Math.ceil(s.length/3),nc=groups*3,cw=34,pad=6,W=pad*2+nc*cw,X=c=>pad+c*cw+cw/2;
+      const GN=["الواحدات","الآلاف","الملايين"],SUB=["آحاد","عشرات","مئات"],ds=s.padStart(nc," ");let g="";
+      for(let k=0;k<groups;k++){const x0=pad+(nc-(k+1)*3)*cw;g+=`<rect x="${x0+2}" y="3" width="${3*cw-4}" height="24" rx="7" fill="var(--brand-soft)"/>`+T(x0+1.5*cw,15,GN[k],{size:12,rtl:true,fill:"var(--brand-text)"});}
+      for(let c=0;c<nc;c++){const place=nc-1-c,d=ds[c],on=place===hi;
+        g+=T(X(c),41,SUB[place%3],{size:10,rtl:true,w:700,fill:"var(--ink-2)"});
+        g+=`<rect x="${pad+c*cw+3}" y="53" width="${cw-6}" height="34" rx="8" fill="${on?"var(--lamp)":"var(--surface)"}" stroke="${on?"var(--lamp)":"var(--line)"}" stroke-width="1.6"/>`;
+        if(d!==" ")g+=T(X(c),70.5,N(d),{size:18,fill:on?"var(--on-lamp)":"var(--ink)"});}
+      for(let k=1;k<groups;k++){const x=pad+(nc-k*3)*cw;g+=`<line x1="${x}" y1="3" x2="${x}" y2="89" stroke="var(--brand-text)" stroke-width="1.6" stroke-dasharray="3 3"/>`;}
+      let cap=`العدد ${s} على لوحة المنازل`;
+      if(hi>=0&&hi<s.length){const d=s[s.length-1-hi];cap=`القيمة المنزلية للرقم ${d} في العدد ${s} هي ${d==="0"?"0":d+"0".repeat(hi)}`;}
+      return{svg:svg(W,92,g,"لوحة المنازل للعدد "+N(s)),cap};},
+    /* --- column addition / subtraction (grade 4): "col:458+375" shows the carried 1s above the columns,
+       "col:503-278" shows the borrowing (the new digits above, the old ones crossed out) --- */
+    col(arg){const m=String(arg||"").replace(/\s/g,"").match(/^(\d{1,7})([+\-−])(\d{1,7})$/);if(!m)return null;
+      const a=m[1],b=m[3],sub=m[2]!=="+",A=+a,B=+b;if(sub&&B>A)return null;
+      const res=String(sub?A-B:A+B),n=Math.max(a.length,b.length,res.length),cw=24,pad=10,W=pad*2+(n+1)*cw,X=c=>pad+(c+1)*cw+cw/2;
+      const pa=a.padStart(n," "),pb=b.padStart(n," "),pr=res.padStart(n," "),top=[...pa].map(ch=>ch===" "?null:+ch),bot=[...pb].map(ch=>ch===" "?0:+ch);
+      const small={},crossed=new Set(),yS=14,yA=40,yB=68,yR=100;let g="";
+      if(!sub){let carry=0;for(let c=n-1;c>=0;c--){const t=(top[c]||0)+bot[c]+carry;carry=t>=10?1:0;if(carry&&c>0)small[c-1]="1";}}
+      else{const t=top.slice();for(let c=n-1;c>=0;c--){if(t[c]==null)break;if(t[c]<bot[c]){let k=c-1;while(k>=0&&t[k]===0){t[k]=9;crossed.add(k);k--;}if(k<0)return null;t[k]-=1;crossed.add(k);t[c]+=10;crossed.add(c);}}
+        crossed.forEach(c=>{small[c]=String(t[c]);});}
+      Object.keys(small).forEach(c=>{g+=T(X(+c),yS,N(small[c]),{size:12,fill:"var(--lamp)",w:900});});
+      for(let c=0;c<n;c++){if(pa[c]!==" "){g+=T(X(c),yA,N(pa[c]),{size:18,fill:crossed.has(c)?"var(--ink-3)":"var(--ink)"});
+          if(crossed.has(c))g+=`<line x1="${X(c)-7}" y1="${yA+7}" x2="${X(c)+7}" y2="${yA-7}" stroke="var(--lamp)" stroke-width="2" stroke-linecap="round"/>`;}
+        if(pb[c]!==" ")g+=T(X(c),yB,N(pb[c]),{size:18});
+        if(pr[c]!==" ")g+=T(X(c),yR,N(pr[c]),{size:18,fill:"var(--brand-text)"});}
+      g+=T(pad+cw/2,yB,sub?"−":"+",{size:18,fill:"var(--ink-2)"})+`<line x1="${pad}" y1="${yB+15}" x2="${pad+(n+1)*cw}" y2="${yB+15}" stroke="var(--brand-text)" stroke-width="2" stroke-linecap="round"/>`;
+      return{svg:svg(W,yR+16,g,(sub?"طرح عمودي: ":"جمع عمودي: ")+N(a)+(sub?" ناقص ":" زائد ")+N(b),W*1.45),
+        cap:sub?`${a} − ${b} = ${res}${crossed.size?": عندما يكون الرقم في الأعلى أصغر، أستلف من المنزلة التي على يساره.":""}`:`${a} + ${b} = ${res}${Object.keys(small).length?": عندما يصبح مجموع منزلة 10 أو أكثر، أحمل 1 إلى المنزلة التالية.":""}`};},
     tree(arg){const ns=nums(arg);if(!ns.length)return null;const b=sideBySide((AR?ns.slice().reverse():ns).map(treeG),18);
       return{svg:svg(b.W,b.H,b.g,"شجرة العوامل الأولية للعدد "+ns.map(N).join(" و ")),cap:ns.map(n=>`${n} = ${primes(n).join(" × ")}`).join("  ،  ")};},
     ladder(arg){const ns=nums(arg);if(!ns.length)return null;const b=sideBySide((AR?ns.slice().reverse():ns).map(ladderG),26);
