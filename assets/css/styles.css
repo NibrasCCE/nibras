@@ -854,3 +854,24 @@ body.wide .top{background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-
 .lsn-tabs button{border:0;background:transparent;border-radius:999px;padding:7px 16px;font:800 .95rem var(--f-body);color:var(--ink-2);cursor:pointer}
 .lsn-tabs button[aria-selected="true"]{background:var(--surface);color:var(--logo);box-shadow:0 1px 4px rgba(20,35,79,.12)}
 .lsn{margin-block:6px}
+
+/* ---------- skill numbers, prerequisites, quiz grades ---------- */
+.sknum{display:inline-block;font-family:var(--f-num);font-weight:900;font-size:.8em;background:var(--brand-soft);color:var(--brand-text);border-radius:999px;padding:0 9px;margin-inline-end:8px;vertical-align:middle;line-height:1.7}
+.skpre{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.skpre a.chip{text-decoration:none}
+.skpre a.chip:hover{outline:2px solid var(--brand-text);outline-offset:1px}
+.stars{display:inline-flex;gap:2px;vertical-align:middle}
+.star{width:18px;height:18px;fill:var(--surface-2);stroke:var(--line);stroke-width:1.2}
+.star.on{fill:var(--lamp);stroke:var(--lamp)}
+.quizres .stars .star{width:44px;height:44px}
+.skgrade{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px}
+.quizbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.quizbar .grow{flex:1;min-width:200px}
+.quizhead{display:grid;gap:8px}
+.qdots{display:flex;gap:6px}
+.qdots i{flex:1;height:8px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line)}
+.qdots i.done{background:var(--brand-text);border-color:var(--brand-text)}
+.qdots i.now{background:var(--lamp);border-color:var(--lamp)}
+.qrev{display:grid;gap:6px;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface)}
+.qrev .stem{margin:0;font-size:1rem}
+.skgrade-row{align-items:center}

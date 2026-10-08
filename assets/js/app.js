@@ -11,6 +11,21 @@ const skillById=Object.fromEntries(SKILLS.map(s=>[s.id,s]));
 const misById=Object.fromEntries(MIS.map(m=>[m.id,m]));
 const qById=Object.fromEntries(QS.map(q=>[q.id,q]));
 const SK_LV=Object.fromEntries(LEVELS.map(l=>[l.id,SKILLS.filter(s=>s.lv===l.id).map(s=>s.id)]));
+/* skill numbers inside each level (5.1 … 7.4) and the skills each one builds on (`pre` in data.js) */
+const SK_NUM=Object.fromEntries(LEVELS.flatMap(l=>SK_LV[l.id].map((id,i)=>[id,l.g+"."+(i+1)])));
+const skNum=id=>arNum(SK_NUM[id]||"");
+const preOf=id=>(skillById[id].pre||[]).filter(x=>skillById[x]);
+const nextOf=id=>SKILLS.filter(s=>(s.pre||[]).includes(id)).map(s=>s.id);
+/* the skill quiz: up to QUIZ_MAX of the skill's questions, one try each, the correction at the end.
+   The skill's grade is the best quiz so far: 3 stars = all right, 2 = one mistake, 1 = half right or more.
+   Two stars or more also light the skill's lantern. */
+const QUIZ_MAX=5;
+const GRADES=[["لسا بدها تدريب","plain"],["بداية حلوة","calm"],["متقدّم","good"],["متمكّن","lit"]];
+const starsFor=(c,n)=>!n?0:c===n?3:c===n-1?2:c*2>=n?1:0;
+const quizOf=(p,sid)=>(p.quiz||{})[sid]||null;
+const STAR=on=>`<svg class="star${on?" on":""}" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2l-5.7 3.1 1.2-6.4L2.8 9.5l6.4-.8z"/></svg>`;
+const starsHTML=k=>`<span class="stars" role="img" aria-label="${k} من 3 نجوم">${[1,2,3].map(i=>STAR(i<=k)).join("")}</span>`;
+const gradeChip=k=>`<span class="chip ${GRADES[k][1]}">${GRADES[k][0]}</span>`;
 const DIAG_PICK={s5a:["q5a1","q5a2"],s5b:["q5b1","q5b2"],s5c:["q5c1","q5c2"],s6a:["q6a2","q6a1"],s6b:["q6b2","q6b1"],s6c:["q6c2","q6c1"],s7a:["q7a2","q7a1"],s7b:["q7b1","q7b2"],s7c:["q7c2","q7c1"],s7d:["q7d2","q7d5"]};
 const LET=["أ","ب","ج","د"];
 const DAILY_LIMIT=30, MASTER_STREAK=3;
@@ -471,7 +486,7 @@ const TAB_IC={
 };
 const TABS=[["play","التشخيص","play"],["path","مساري","path"],["ask","اسأل نبراس","ask"],["me","حسابي","me"]];
 const route=()=>location.hash.replace(/^#/,"")||"home";
-function tabOf(r){if(r.startsWith("skill-"))return"path";if(r==="result")return"play";return r;}
+function tabOf(r){if(r.startsWith("skill-")||r.startsWith("quiz-"))return"path";if(r==="result")return"play";return r;}
 function renderNav(){
   const u=ME(),t=tabOf(route());
   const tabs=u&&u.role==="student"?TABS:[];
@@ -498,9 +513,10 @@ function render(){
   if(u.role==="parent")return vParent();
   if(u.role==="teacher"){if(r!=="ask"){location.hash="#ask";return;}return vAsk();} /* guest teacher: chat only */
   if(r.startsWith("skill-")&&skillById[r.slice(6)])return vSkill(r.slice(6));
+  if(r.startsWith("quiz-")&&skillById[r.slice(5)])return vQuiz(r.slice(5));
   ({home:vHome,play:vPlay,result:vResult,path:vPath,ask:vAsk,me:vMe}[r]||vHome)();
 }
-window.addEventListener("hashchange",()=>{if(G&&route()!=="play")G=null;if(P&&!route().startsWith("skill-"))P=null;render();window.scrollTo(0,0);});
+window.addEventListener("hashchange",()=>{if(G&&route()!=="play")G=null;if(P&&!route().startsWith("skill-"))P=null;if(QZ&&!route().startsWith("quiz-"))QZ=null;render();window.scrollTo(0,0);});
 
 /* ---------- landing ---------- */
 const IC_KID='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="3.5"/><path d="M6 21v-3a6 6 0 0 1 12 0v3"/><path d="M9 14l3 3 3-3"/></svg>';
@@ -946,7 +962,7 @@ function drawGame(){
   const q=G.q,sk=skillById[q.skill],n=G.asked.length+1;
   app.innerHTML=`<section class="game">
     ${islandsHTML()}
-    <div class="station"><span class="badge">${LV[G.lv].name}</span><span>${esc(sk.title)}</span><span class="qn">· لغز ${n}</span></div>
+    <div class="station"><span class="badge">${LV[G.lv].name}</span><span>${skNum(sk.id)} ${esc(sk.title)}</span><span class="qn">· لغز ${n}</span></div>
     <div class="puzzle">
       <div class="ptype"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${TYPE_IC[q.type]}</svg>${TYPE_NAME[q.type]}</div>
       ${q.scale?scaleSVG(q.stem):""}
@@ -1111,7 +1127,9 @@ function vPath(){
       <div class="trail">${SK_LV[l.id].map(id=>{const s=skillById[id],lit=isLit(id),now=cur&&cur.id===id,st=S.diag.skills[id];idx++;
         const chip=lit?(st==="assumed"&&!S.lit[id]?["ثابتة ✦","good"]:["متقَنة ✦","lit"]):now?["أنت هنا","lit"]:(st==="partial"||st==="gap")?["بدها شغل","calm"]:["قريباً","plain"];
         return `<a class="stop ${lit?"lit":""} ${now?"now":""}" href="#skill-${id}"><span class="orb">${LANTERN(lit?"on":"off")}</span>
-          <span class="info"><span class="row between" style="gap:8px"><b>${esc(s.title)}</b><span class="chip ${chip[1]}">${chip[0]}</span></span><span class="small muted">${esc(s.summary)}</span><span class="tiny">${esc(s.src)}</span></span></a>`;}).join("")}</div>
+          <span class="info"><span class="row between" style="gap:8px"><b><span class="sknum">${skNum(id)}</span>${esc(s.title)}</b><span class="chip ${chip[1]}">${chip[0]}</span></span><span class="small muted">${esc(s.summary)}</span>
+          <span class="tiny">${preOf(id).length?"بتعتمد على: "+preOf(id).map(x=>skNum(x)+" "+esc(skillById[x].title)).join("، "):"مهارة أساس، ما بتعتمد على مهارة قبلها"}</span>
+          ${quizOf(S,id)?`<span class="skgrade">${starsHTML(quizOf(S,id).best)}${gradeChip(quizOf(S,id).best)}</span>`:""}<span class="tiny">${esc(s.src)}</span></span></a>`;}).join("")}</div>
     </div>`;}).join("")}
     ${det.length?`<div class="card" style="display:grid;gap:10px"><h3>أفكار بنشتغل عليها</h3><div class="ideas">${det.map(([id])=>`<div class="idea">${BULB}<div><b>${esc(misById[id].title)}</b><p class="small muted">${mathify(HINT[id])}</p></div></div>`).join("")}</div></div>`:""}
     <p class="draft">محتوى تجريبي (مسودة) بانتظار مراجعة معلم رياضيات ومطابقته مع المنهاج.</p>
@@ -1150,8 +1168,10 @@ function vSkill(sid){
   app.innerHTML=`<section class="view">
     <div class="row between"><a class="btn btn-line btn-sm" href="#path">← مساري</a><span class="chip ${lit?"lit":"calm"}">${lit?"فانوس مضاء ✦":`سلسلة ${streak} من ${MASTER_STREAK}`}</span></div>
     <div class="card explain">
-      <p class="eyebrow">${LV[sk.lv].name}</p>
-      <h2>${esc(sk.title)}</h2>
+      <p class="eyebrow">${LV[sk.lv].name} · مهارة ${skNum(sid)}</p>
+      <h2><span class="sknum">${skNum(sid)}</span>${esc(sk.title)}</h2>
+      <div class="skpre"><span class="small muted">${preOf(sid).length?"قبل هالمهارة:":"مهارة أساس، ما بتعتمد على مهارة قبلها."}</span>${preOf(sid).map(x=>`<a class="chip ${isLit(x)?"lit":"plain"}" href="#skill-${x}">${skNum(x)} ${esc(skillById[x].title)}${isLit(x)?" ✦":""}</a>`).join("")}
+        ${nextOf(sid).length?`<span class="small muted">بتفتحلك:</span>${nextOf(sid).map(x=>`<a class="chip plain" href="#skill-${x}">${skNum(x)} ${esc(skillById[x].title)}</a>`).join("")}`:""}</div>
       ${LSN?`<div class="lsn-tabs" role="tablist" aria-label="طريقة الشرح"><button type="button" role="tab" data-lsn="watch" aria-selected="${P.read?"false":"true"}">شاهد الشرح مع نبراس</button><button type="button" role="tab" data-lsn="read" aria-selected="${P.read?"true":"false"}">اقرأ الشرح</button></div><div id="lsnhost"${P.read?" hidden":""}></div>`:""}
       <div id="xread"${LSN&&!P.read?" hidden":""}>
       ${xl>0?xlBody(sk,xl):`<p>${mathify(sk.explanation)}</p>
@@ -1164,7 +1184,7 @@ function vSkill(sid){
       <p class="tiny">${esc(sk.src)}</p>
     </div>
     ${finished?`<div class="card done">${LANTERN("big on")}<h2>${lit?"ضوّيت فانوس هالمحطة!":"خلّصت تمارين المحطة"}</h2><p class="muted">${lit?"يلا على المحطة الجاية.":`بدك تعيد التمارين؟ كل ${MASTER_STREAK} إجابات صح من أول محاولة ورا بعض بتضوّي الفانوس.`}</p>
-      <div class="row" style="justify-content:center">${lit&&currentSkill()?`<a class="btn btn-go" href="#skill-${currentSkill().id}">المحطة الجاية</a>`:`<button class="btn btn-go" id="again" type="button">أعد التمارين</button>`}<a class="btn btn-line" href="#path">مساري</a></div></div>`:
+      <div class="row" style="justify-content:center"><a class="btn btn-go" href="#quiz-${sid}">${quizOf(S,sid)?"أعد كويز المهارة":"كويز المهارة"}</a>${lit&&currentSkill()?`<a class="btn btn-line" href="#skill-${currentSkill().id}">المحطة الجاية</a>`:`<button class="btn btn-line" id="again" type="button">أعد التمارين</button>`}<a class="btn btn-line" href="#path">مساري</a></div></div>`:
     `<div class="puzzle">
       <div class="row between"><span class="ptype"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${TYPE_IC[q.type]}</svg>${TYPE_NAME[q.type]} · تمرين ${P.i+1} من ${P.qs.length}</span>
         <span class="meter" aria-label="السلسلة">${Array.from({length:MASTER_STREAK},(_,k)=>`<i class="${k<streak||lit?"on":""}"></i>`).join("")}</span></div>
@@ -1178,6 +1198,7 @@ function vSkill(sid){
         ${P.state==="right"?`<button class="btn btn-go" id="nextq" type="button">التالي</button>`:`<button class="btn btn-go" id="chk" type="button" disabled>تحقّق</button>`}
       </div>
     </div>`}
+    ${quizBar(sid,finished)}
   </section>`;
   /* lesson video: «شاهد» mounts the Nibras player, «اقرأ» shows the written explanation */
   if(LSN){app.querySelectorAll("[data-lsn]").forEach(b=>b.onclick=()=>{P.read=b.dataset.lsn==="read";vSkill(sid);});
@@ -1222,6 +1243,81 @@ function pick(val,btn,placedIdx){
     P.first=false;P.state="hint";P.fb=r;if(r.mis)bump(r.mis);S.streak[sid]=0;beep("soft");
   }
   save();vSkill(sid);
+}
+
+/* ---------- skill quiz + grade ---------- */
+function quizBar(sid,finished){
+  const qz=quizOf(S,sid),n=Math.min(QUIZ_MAX,QS.filter(q=>q.skill===sid).length);
+  return `<div class="card quizbar"><div class="grow" style="display:grid;gap:4px"><b>كويز المهارة ${skNum(sid)}</b>
+    <p class="small muted">${arNum(n)} أسئلة، محاولة وحدة لكل سؤال، والتصحيح بالآخر.${isLit(sid)?"":" نجمتين أو أكثر بيضوّوا الفانوس."}</p>
+    ${qz?`<span class="skgrade">${starsHTML(qz.best)}${gradeChip(qz.best)}<span class="tiny">أحسن نتيجة: ${arNum(qz.bestScore!=null?qz.bestScore:qz.score)} من ${arNum(qz.n)}</span></span>`:""}</div>
+    <a class="btn ${finished?"btn-go":"btn-line"}" href="#quiz-${sid}">${qz?"أعد الكويز":"ابدأ الكويز"}</a></div>`;
+}
+let QZ=null;
+function vQuiz(sid){
+  const sk=skillById[sid];
+  if(!QZ||QZ.sid!==sid){const qs=shuffle(QS.filter(q=>q.skill===sid)).slice(0,QUIZ_MAX).sort((a,b)=>a.d-b.d);QZ={sid,qs,i:0,ans:[],done:false,w:null};}
+  if(QZ.done)return quizResult(sid);
+  const q=QZ.qs[QZ.i],last=QZ.i===QZ.qs.length-1;
+  app.innerHTML=`<section class="view">
+    <div class="row between"><a class="btn btn-line btn-sm" href="#skill-${sid}">← رجوع للمهارة</a><span class="chip calm">سؤال ${arNum(QZ.i+1)} من ${arNum(QZ.qs.length)}</span></div>
+    <div class="card quizhead"><p class="eyebrow">كويز المهارة ${skNum(sid)}</p><h2>${esc(sk.title)}</h2>
+      <div class="qdots" aria-hidden="true">${QZ.qs.map((_,k)=>`<i class="${k<QZ.i?"done":k===QZ.i?"now":""}"></i>`).join("")}</div>
+      <p class="small muted">محاولة وحدة لكل سؤال. التصحيح والتلميحات بآخر الكويز.</p></div>
+    <div class="puzzle">
+      <div class="ptype"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${TYPE_IC[q.type]}</svg>${TYPE_NAME[q.type]}</div>
+      ${q.scale?scaleSVG(q.stem):""}
+      ${q.fig?figsHTML(q.fig,q.fcap):""}
+      <p class="stem">${mathify(q.stem)}</p>
+      <div id="w"></div>
+    </div>
+    <div class="row between">
+      <button class="btn btn-line btn-sm" id="qskip" type="button">مش عارف</button>
+      <button class="btn btn-go" id="qnext" type="button" disabled>${last?"خلّصت، صحّحلي":"ثبّت جوابي"}</button>
+    </div>
+  </section>`;
+  const nx=$("#qnext");
+  const go=(val,skip)=>{if(QZ.busy)return;QZ.busy=true;
+    const r=skip?{ok:false,mis:null}:grade(q,val);
+    QZ.ans.push({ok:r.ok,mis:r.mis||null,a:skip?null:answerText(q,val)});
+    if(!r.ok&&r.mis)bump(r.mis);
+    beep("pop");QZ.i++;QZ.busy=false;
+    if(QZ.i>=QZ.qs.length)finishQuiz();else{vQuiz(sid);window.scrollTo(0,0);}};
+  QZ.w=mountWidget(q,$("#w"),{mode:"diag",onChange:ok=>{nx.disabled=!ok;},onEnter:()=>{if(QZ.w.ready())go(QZ.w.value());}});
+  nx.onclick=()=>{if(QZ.w.ready())go(QZ.w.value());};
+  $("#qskip").onclick=()=>go(null,true);
+}
+function finishQuiz(){
+  const sid=QZ.sid,n=QZ.qs.length,c=QZ.ans.filter(a=>a.ok).length,k=starsFor(c,n);
+  S.quiz=S.quiz||{};const old=S.quiz[sid];
+  const better=!old||k>old.best||(k===old.best&&c>(old.bestScore!=null?old.bestScore:old.score));
+  S.quiz[sid]={best:better?k:old.best,bestScore:better?c:(old.bestScore!=null?old.bestScore:old.score),last:k,score:c,n,tries:(old?old.tries:0)+1,at:new Date().toISOString()};
+  Object.assign(QZ,{done:true,stars:k,c,first:!old,up:!!old&&k>old.best});
+  logEvent("quiz",{skill:sid,score:c,n,stars:k});
+  beep(k>=2?"win":"soft");
+  if(k>=2&&!isLit(sid))markLit(sid);else save();
+  vQuiz(sid);window.scrollTo(0,0);
+}
+function quizResult(sid){
+  const k=QZ.stars,c=QZ.c,n=QZ.qs.length,rec=quizOf(S,sid),nx=currentSkill();
+  const wrong=QZ.ans.map((a,i)=>[a,QZ.qs[i]]).filter(([a])=>!a.ok);
+  const msg=k===3?"ولا غلطة! أنت متمكّن من هالمهارة.":k===2?"شغل ممتاز، ضايلك خطوة صغيرة للعلامة الكاملة.":k===1?"قرّبت. راجع الأسئلة تحت وجرّب كمان مرة.":"ولا يهمك. ارجع للشرح والتمارين، وبعدين جرّب الكويز مرة ثانية.";
+  app.innerHTML=`<section class="view">
+    <div class="row between"><a class="btn btn-line btn-sm" href="#skill-${sid}">← رجوع للمهارة</a><a class="btn btn-line btn-sm" href="#path">مساري</a></div>
+    <div class="card done quizres">${starsHTML(k)}
+      <h2>${arNum(c)} من ${arNum(n)} صح</h2>
+      <p>${gradeChip(k)}</p>
+      <p class="muted">${msg}${QZ.up?" وهاي أحسن من نتيجتك السابقة!":""}</p>
+      ${rec&&rec.tries>1&&rec.best>k?`<p class="small muted">درجتك بالمهارة بتضل أحسن نتيجة إلك: ${starsHTML(rec.best)}</p>`:""}
+      <div class="row" style="justify-content:center"><button class="btn btn-go" id="qagain" type="button">أعد الكويز</button>
+        ${k>=2&&nx&&nx.id!==sid?`<a class="btn btn-line" href="#skill-${nx.id}">المحطة الجاية</a>`:`<a class="btn btn-line" href="#skill-${sid}">ارجع للشرح والتمارين</a>`}</div>
+    </div>
+    ${wrong.length?`<div class="card" style="display:grid;gap:12px"><h3>خلينا نراجع اللي ما زبط</h3>
+      ${wrong.map(([a,q])=>`<div class="qrev"><p class="stem">${mathify(q.stem)}</p>
+        <p class="small">${a.a==null?"ضغطت «مش عارف»":`جوابك: ${mathify(a.a)}`} · <b>الجواب الصح: ${mathify(correctText(q))}</b></p>
+        ${a.mis&&HINT[a.mis]?`<div class="idea">${BULB}<p class="small">${mathify(HINT[a.mis])}</p></div>`:""}</div>`).join("")}</div>`:""}
+  </section>`;
+  $("#qagain").onclick=()=>{QZ=null;vQuiz(sid);};
 }
 
 /* ---------- parent dashboard ---------- */
@@ -1313,7 +1409,7 @@ function vParent(){
 }
 function kidCard(k){
   const p=k.progress,d=p.diag,cur=currentSkillP(p);
-  const evText=e=>e.kind==="diag"?"خلّص التشخيص الأولي":e.kind==="skill"&&skillById[e.skill]?`أتقن «${skillById[e.skill].title}»`:e.kind==="level"&&LV[e.level]?`أنهى ${LV[e.level].name}`:"";
+  const evText=e=>e.kind==="diag"?"خلّص التشخيص الأولي":e.kind==="skill"&&skillById[e.skill]?`أتقن «${skillById[e.skill].title}»`:e.kind==="level"&&LV[e.level]?`أنهى ${LV[e.level].name}`:e.kind==="quiz"&&skillById[e.skill]?`كويز «${skillById[e.skill].title}»: ${arNum(e.score)} من ${arNum(e.n)}`:"";
   const evs=(p.events||[]).filter(e=>evText(e)).slice().reverse().slice(0,8);
   return `<div class="card kid">
     <div class="kidhead"><span class="avatar-md">${avatar(k.avatar)}</span><div class="grow"><h3>${esc(k.nick||"")}</h3><p class="small muted">${d?(cur?`المحطة الحالية: ${esc(cur.title)} · ${LV[cur.lv].name}`:"أنهى كل المحطات"):"لسا ما لعب لعبة التشخيص"}</p></div><span class="chip lit">${litCount(p)} من ${SKILLS.length}</span></div>
@@ -1327,6 +1423,7 @@ function kidCard(k){
     <div style="display:grid;gap:10px">
       <h4 style="margin:0;color:var(--logo)">التقدّم بالمراحل</h4>
       ${LEVELS.map(l=>{const n=SK_LV[l.id].length,c=litCount(p,l.id);return `<div style="display:grid;gap:4px"><div class="row between small"><span>${l.name}</span><span>${c} من ${n}</span></div><div class="pbar" aria-hidden="true"><i style="width:${Math.round(c/n*100)}%"></i></div></div>`;}).join("")}
+      ${SKILLS.some(sk=>quizOf(p,sk.id))?`<div style="display:grid;gap:6px"><b class="small">درجات كويزات المهارات</b>${SKILLS.filter(sk=>quizOf(p,sk.id)).map(sk=>{const r=quizOf(p,sk.id);return `<div class="row between small skgrade-row"><span><span class="sknum">${skNum(sk.id)}</span>${esc(sk.title)}</span><span class="skgrade">${starsHTML(r.best)}${gradeChip(r.best)}</span></div>`;}).join("")}</div>`:""}
       ${evs.length?`<ul class="timeline">${evs.map(e=>`<li><span class="when">${fmtTime(e.at)}</span><span>${esc(evText(e))}</span></li>`).join("")}</ul>`:""}
     </div>
     <div><button class="btn btn-line btn-sm" type="button" data-unlink="${esc(k.id)}">فك الربط</button></div>
