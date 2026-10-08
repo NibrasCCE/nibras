@@ -41,11 +41,6 @@ function mount(host){
       <button class="intro-play" type="button"><span class="ic">${ICON_PLAY}</span><span>شاهد مين نبراس · 46 ثانية</span></button>
       <div class="intro-end" hidden><div>
         <p class="t">جاهز تبلّش رحلتك؟</p>
-        <div class="intro-end-row">
-          <a class="btn btn-go btn-sm" href="#auth-student">دخول الطلاب</a>
-          <a class="btn btn-sm intro-ghost" href="#auth-parent">دخول الأهالي</a>
-          <button class="btn btn-sm intro-ghost" type="button" data-teacher>دخول المعلمين</button>
-        </div>
         <button class="intro-replay" type="button">شاهد الفيديو كمان مرة</button>
       </div></div>
     </div>
@@ -130,8 +125,8 @@ function mount(host){
     ctx.restore();}
   function sGap(p,t){
     txt("صفّه السابع…",640,118,{size:60,weight:800,alpha:ease(seg(p,.03,.16))});
-    txt("بس في محطة ناقصة من الصف الخامس",640,192,{size:38,weight:700,color:C.glow,alpha:ease(seg(p,.5,.64))});
-    const xs=[1000,640,280],labels=["الصف الخامس","الصف السادس","الصف السابع"];
+    txt("بس في محطة ناقصة من الصف الثالث",640,192,{size:38,weight:700,color:C.glow,alpha:ease(seg(p,.5,.64))});
+    const xs=[1000,640,280],labels=["الصف الثالث","الصف الخامس","الصف السابع"];
     xs.forEach((x,i)=>{const a=ease(seg(p,.06+i*.08,.28+i*.08));island(x,520+(1-a)*50,a,i===0&&p>.42,t,labels[i]);});
     const d=seg(p,.55,.86);
     if(d>0){ctx.save();ctx.setLineDash([10,14]);ctx.lineDashOffset=reduceMotion?0:-t*30;ctx.strokeStyle=C.glow;ctx.lineWidth=4;ctx.lineCap="round";
@@ -191,7 +186,8 @@ function mount(host){
     ctx.fillStyle=C.glow;circle(px,py,7);
   }
   function sGames(p,t){
-    txt("رحلة التشخيص: ألعاب وألغاز",640,108,{size:50,weight:800,alpha:ease(seg(p,0,.1))});
+    txt("رحلة التشخيص: ألعاب وألغاز",640,96,{size:50,weight:800,alpha:ease(seg(p,0,.1))});
+    txt("من الصف الأول للصف السابع",640,150,{size:30,weight:700,color:C.glow,alpha:ease(seg(p,.06,.16))});
     [{x:1010,label:"فقاعات",f:gBubbles},{x:640,label:"ضفدع على خط الأعداد",f:gFrog},{x:270,label:"ميزان المعادلة",f:gBalance}].forEach((pn,i)=>{
       const a=ease(seg(p,.04+i*.07,.18+i*.07));if(a<=0)return;
       ctx.save();ctx.globalAlpha*=a;ctx.translate(0,(1-a)*30);
@@ -202,17 +198,18 @@ function mount(host){
   /* ---------- scene 4: the path ---------- */
   const PP=u=>({x:1170-u*1060,y:455+70*Math.sin(u*Math.PI*2)});
   function sPath(p,t){
-    txt("مسار خاص فيك",640,98,{size:54,weight:800,alpha:ease(seg(p,0,.1))});
-    txt("وكل مهارة بتتقنها بتضوي فانوس",640,160,{size:34,weight:500,color:C.glow,alpha:ease(seg(p,.05,.15))});
+    txt("مسارك كامل، خاص فيك",640,98,{size:54,weight:800,alpha:ease(seg(p,0,.1))});
+    txt("من الصف الأول للسابع، وكل مهارة بتتقنها بتضوي فانوس",640,160,{size:32,weight:500,color:C.glow,alpha:ease(seg(p,.05,.15))});
     ctx.save();ctx.strokeStyle="rgba(255,209,102,.4)";ctx.lineWidth=6;ctx.lineCap="round";ctx.setLineDash([2,14]);ctx.beginPath();
     for(let i=0;i<=80;i++){const k=PP(i/80);i?ctx.lineTo(k.x,k.y):ctx.moveTo(k.x,k.y);}ctx.stroke();ctx.restore();
-    [["الخامس",.15],["السادس",.45],["السابع",.8]].forEach(([l,u])=>txt(l,PP(u).x,652,{size:28,weight:800,color:C.soft}));
-    ctx.strokeStyle="rgba(195,205,238,.25)";ctx.lineWidth=2;[.3,.6].forEach(u=>{const x=PP(u).x;ctx.beginPath();ctx.moveTo(x,620);ctx.lineTo(x,680);ctx.stroke();});
-    for(let i=0;i<10;i++){const k=PP((i+.5)/10),lit=ease(seg(p,.18+i*.06,.24+i*.06));
+    ["الأول","الثاني","الثالث","الرابع","الخامس","السادس","السابع"].forEach((l,i)=>txt(l,PP((i+.5)/7).x,652,{size:24,weight:800,color:C.soft}));
+    ctx.strokeStyle="rgba(195,205,238,.25)";ctx.lineWidth=2;[1,2,3,4,5,6].forEach(i=>{const x=PP(i/7).x;ctx.beginPath();ctx.moveTo(x,628);ctx.lineTo(x,676);ctx.stroke();});
+    const NL=14;
+    for(let i=0;i<NL;i++){const k=PP((i+.5)/NL),lit=ease(seg(p,.18+i*.045,.23+i*.045));
       ctx.strokeStyle="#5A6BA8";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(k.x,k.y);ctx.lineTo(k.x,k.y-24);ctx.stroke();
       ctx.fillStyle="#2D58C2";ell(k.x,k.y,16,6);ctx.fill();
-      lantern(k.x,k.y-50,1,lit,t);}
-    const ku=clamp(((p-.15)/.06+.5)/10,.03,.95),kq=PP(ku),moving=p>.15&&p<.8;
+      lantern(k.x,k.y-50,.85,lit,t);}
+    const ku=clamp(((p-.15)/.045+.5)/NL,.03,.95),kq=PP(ku),moving=p>.15&&p<.8;
     kid(kq.x+34,kq.y+4,.7,{look:-1,step:moving&&!reduceMotion?t*10:0,alpha:ease(seg(p,.1,.18))});
   }
   /* ---------- scene 5: ask Nibras (same sides as the site's chat: Nibras on the right, the student on the left) ---------- */
@@ -268,7 +265,7 @@ function mount(host){
     const m=still?1:ease(seg(p,.12,.36)),wd=still?1:ease(seg(p,.28,.48)),s=1.2*(.88+.12*m);
     ctx.save();ctx.globalAlpha*=m;siteLogo(640-280*s,(still?300:330)-148*s,s,{word:wd,glow:.45*(reduceMotion?1:.85+.15*Math.sin(t*3))});ctx.restore();
     txt("نبراس · تعلّم من مستواك",640,still?520:550,{size:46,weight:800,color:"#565D72",alpha:still?1:ease(seg(p,.42,.58))});
-    if(!still){const b=ease(seg(p,.6,.74));if(b>0){ctx.save();ctx.globalAlpha*=b;ctx.fillStyle=C.lamp;rr(640-170,606,340,66,33);txt("ابدأ رحلتك من مستواك",640,640,{size:28,weight:800,color:C.ink});ctx.restore();}}
+    if(!still)txt("ابدأ رحلتك من مستواك",640,632,{size:32,weight:800,color:"#B86E00",alpha:ease(seg(p,.6,.74))});
   }
   const SCENES=[{t0:0,t1:6,f:sGap},{t0:6,t1:12,f:sLantern},{t0:12,t1:20,f:sGames},{t0:20,t1:27,f:sPath},{t0:27,t1:34,f:sChat},{t0:34,t1:40,f:sAdults},{t0:40,t1:46,f:sLogo}];
   function render(t,still){
@@ -318,7 +315,6 @@ function mount(host){
   const toggle=()=>playing?pause():play();
   bigplay.onclick=play;pp.onclick=toggle;
   q(".intro-replay").onclick=()=>{T=0;play();};
-  q("[data-teacher]").onclick=()=>{const b=document.getElementById("guest-teacher");if(b)b.click();};
   canvas.addEventListener("click",()=>{if(started)toggle();});
   stage.addEventListener("keydown",e=>{if(e.target!==stage)return;if(e.key===" "||e.key==="k"){e.preventDefault();toggle();}});
   seek.addEventListener("input",()=>{started=true;bigplay.hidden=true;T=clamp(seek.value/10,0,DUR);if(T<DUR)endcard.hidden=true;render(T);sync();});

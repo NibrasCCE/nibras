@@ -519,7 +519,7 @@ const TAB_IC={
   ask:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 5h16v11H10l-5 4v-4H4z"/><path d="M9 10.5h.01M12 10.5h.01M15 10.5h.01" stroke-linecap="round" stroke-width="2.6"/></svg>',
   me:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>'
 };
-const TABS=[["home","الرئيسية","home"],["path","مساري","path"],["ask","اسأل نبراس","ask"],["me","حسابي","me"]];
+const TABS=[["home","الرئيسية","home"],["path","مساري","path"],["play","التشخيص","play"],["ask","اسأل نبراس","ask"],["me","حسابي","me"]];
 const route=()=>location.hash.replace(/^#/,"")||"home";
 function tabOf(r){if(r.startsWith("skill-")||r.startsWith("quiz-"))return"path";if(r==="result")return"play";return r;}
 function renderNav(){
@@ -535,20 +535,8 @@ function renderNav(){
   const me=$("#me");
   if(!u){me.hidden=true;return;}
   me.hidden=false;
-  if(u.role==="student"){me.innerHTML=`<span class="avatar-sm">${avatar(u.avatar)}</span><span>${esc(u.nick)}</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>`;
-    me.setAttribute("aria-haspopup","true");me.setAttribute("aria-expanded","false");me.onclick=e=>{e.stopPropagation();toggleMeMenu();};}
+  if(u.role==="student"){me.innerHTML=`<span class="avatar-sm">${avatar(u.avatar)}</span><span>${esc(u.nick)}</span>`;me.onclick=()=>{location.hash="#me";};}
   else{me.innerHTML=`<span class="dot">${esc((u.name||(u.role==="teacher"?"م":"و")).slice(0,1))}</span><span>خروج</span>`;me.onclick=logout;}
-}
-/* the student's account menu (under the name button): account + parent link, diagnosis again, log out */
-function toggleMeMenu(force){
-  let m=$("#memenu");const me=$("#me");
-  if(!m){m=document.createElement("div");m.id="memenu";m.className="memenu";m.hidden=true;me.parentNode.appendChild(m);
-    document.addEventListener("click",e=>{const mm=$("#memenu");if(mm&&!mm.hidden&&!mm.contains(e.target))toggleMeMenu(false);});
-    document.addEventListener("keydown",e=>{const mm=$("#memenu");if(e.key==="Escape"&&mm&&!mm.hidden){toggleMeMenu(false);$("#me").focus();}});}
-  const open=force!=null?force:m.hidden;
-  if(open){m.innerHTML=`<a href="#me">حسابي وربط الأهل</a><a href="#play">${S&&S.diag?"أعد التشخيص":"ابدأ التشخيص"}</a><hr><button type="button" id="mm-out">تسجيل خروج</button>`;
-    m.querySelectorAll("a").forEach(a=>a.onclick=()=>toggleMeMenu(false));$("#mm-out",m).onclick=()=>{toggleMeMenu(false);logout();};}
-  m.hidden=!open;me.setAttribute("aria-expanded",String(open));
 }
 async function logout(){if(CHAT.ctl)CHAT.ctl.abort();if(isGuest()&&typeof Store.endGuest==="function")await Store.endGuest();else await Store.logout();S=null;GUEST_S=null;G=null;P=null;PV.kids=null;PV.err="";CHAT.err="";REP.fail=null;location.hash="#home";render();toast("سجّلت خروج");}
 function render(){
@@ -563,7 +551,7 @@ function render(){
   if(r.startsWith("quiz-")&&skillById[r.slice(5)])return canOpen(r.slice(5))?vQuiz(r.slice(5)):vLocked(r.slice(5));
   ({home:vHome,play:vPlay,result:vResult,path:vPath,ask:vAsk,me:vMe}[r]||vHome)();
 }
-window.addEventListener("hashchange",()=>{const mm=$("#memenu");if(mm)mm.hidden=true;if(G&&route()!=="play")G=null;if(P&&!route().startsWith("skill-"))P=null;if(QZ&&!route().startsWith("quiz-"))QZ=null;render();window.scrollTo(0,0);});
+window.addEventListener("hashchange",()=>{if(G&&route()!=="play")G=null;if(P&&!route().startsWith("skill-"))P=null;if(QZ&&!route().startsWith("quiz-"))QZ=null;render();window.scrollTo(0,0);});
 
 /* ---------- landing ---------- */
 const IC_KID='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="3.5"/><path d="M6 21v-3a6 6 0 0 1 12 0v3"/><path d="M9 14l3 3 3-3"/></svg>';
@@ -645,7 +633,7 @@ function vLanding(){
     </section>
 
     <section class="nb-sec" id="nb-plans" aria-labelledby="nb-plans-h">
-      <div class="lsec-head" data-rv><span class="kick">الاشتراكات</span><h2 id="nb-plans-h">اشتراك بسيط وواضح لكل طالب</h2><p>اشتراك شهري لكل طالب، يدفعه وليّ الأمر.</p></div>
+      <div class="lsec-head" data-rv><h2 id="nb-plans-h">الاشتراكات</h2><p>اشتراك شهري لكل طالب، يدفعه وليّ الأمر.</p></div>
       <div class="nb-plans" data-rv>
         <article class="nb-plan main">
           <span class="nb-plan-badge">لأولياء الأمور</span>
