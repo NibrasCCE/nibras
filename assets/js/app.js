@@ -417,7 +417,8 @@ function vLocked(sid){
   </div></section>`;
 }
 const litCount=(p,lv)=>(lv?SK_LV[lv]:pathOf(p).map(s=>s.id)).filter(id=>isLitP(p,id)).length;
-const STATUS={mastered:["متمكّن","lit"],assumed:["ثابتة","good"],partial:["بدها تقوية","calm"],gap:["رح نشتغل عليها","calm"],untested:["لسا ما وصلناها","plain"]};
+/* how a skill came out of the diagnosis: [words for the student, chip class, words for parents and the AI] */
+const STATUS={mastered:["جاوبتها صح","lit","جاوب عليها صح"],assumed:["مفهومة من جوابك","good","مفهومة من جواب صح على مهارة مبنية عليها (ما انسأل عنها)"],partial:["بدها تقوية","calm","بدها تقوية"],gap:["رح نشتغل عليها","calm","غلط فيها"],untested:["رح نتأكد منها","plain","ما انسأل عنها، ورح يتأكد منها بالمسار"]};
 const fmtDate=iso=>{try{return new Date(iso).toLocaleDateString("ar-PS-u-nu-latn",{day:"numeric",month:"long"});}catch(e){return String(iso).slice(0,10);}};
 const fmtTime=iso=>{try{return new Date(iso).toLocaleString("ar-PS-u-nu-latn",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});}catch(e){return String(iso).slice(0,16);}};
 const fmtN=k=>arNum(k<0?"−"+Math.abs(k):String(k));
@@ -438,7 +439,7 @@ function composeMsg0(stu,kind,extra,ch){
     if(gradeOf(p))lines.push(`• الصف: ${gradeLv(gradeOf(p)).short}`);
     lines.push(`• أقدم فجوة: ${start?LV[start.lv].name:"ما في فجوات بالمهارات المختبرة"}`);
     if(start)lines.push(`• نقطة البداية: ${start.title}`);
-    lines.push(`• متمكّن من: ${good.length?good.join("، "):"—"}`);
+    lines.push(`• جاوب صح على: ${good.length?good.join("، "):"—"}`);
     if(weak.length)lines.push(`• بحاجة لتقوية: ${weak.join("، ")}`);
     if(ideas.length)lines.push(`• أفكار رح نشتغل عليها: ${ideas.join("، ")}`);
     lines.push("","التقرير الكامل بصفحة الأهالي على نبراس.");
@@ -1111,7 +1112,7 @@ function reportPrompt(d,start,nick){
 - اختم بجملة أننا سنبدأ معاً من مهارة «${start?start.title:"التحدي مع نبراس"}».
 - لا تذكر أي معلومة غير موجودة في البيانات. ${AR_MATH?"اكتب أي تعبير رياضي كنص عادي بترميز الكتاب المدرسي كما في البيانات: الأرقام ٠١٢٣٤٥٦٧٨٩ والمتغيرات بحروف عربية، مثل ٣س + ٦، بدون LaTeX وبدون علامة الدولار.":"اكتب أي تعبير رياضي بين علامتي $ مثل $3x + 6$."}
 
-حالة المهارات: ${SKILLS.filter(s=>d.skills[s.id]).map(s=>`${s.title} (${LV[s.lv].short}) = ${STATUS[stOf(d,s.id)][0]}`).join("؛ ")}
+حالة المهارات: ${SKILLS.filter(s=>d.skills[s.id]).map(s=>`${s.title} (${LV[s.lv].short}) = ${STATUS[stOf(d,s.id)][2]}`).join("؛ ")}
 إجابات الطالب:
 ${ans}`;
 }
@@ -1125,9 +1126,9 @@ function genReport(d,start){
 }
 const LOCK='<svg class="lk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
 const BULB='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>';
-function levelTable(d){
+function levelTable(d,parent){
   return `<div class="lvgrid">${LEVELS.filter(l=>!d.grade||l.g<=d.grade).map(l=>`<div class="lvbox"><h4>${l.name}</h4>${SK_LV[l.id].map(id=>{const st=stOf(d,id),now=d.start===id;
-    return `<div class="sk"><span>${esc(skillById[id].title)}</span><span class="chip ${now?"lit":STATUS[st][1]}">${now?"البداية من هون":STATUS[st][0]}</span></div>`;}).join("")}</div>`).join("")}</div>`;
+    return `<div class="sk"><span>${esc(skillById[id].title)}</span><span class="chip ${now?"lit":STATUS[st][1]}">${now?"البداية من هون":parent?(st==="mastered"?"جاوب صح":st==="assumed"?"مفهومة من جوابه":st==="gap"?"غلط فيها":STATUS[st][0]):STATUS[st][0]}</span></div>`;}).join("")}</div>`).join("")}</div>`;
 }
 function vResult(){
   if(!S.diag)return vPlay();
@@ -1155,7 +1156,7 @@ function vResult(){
           <p class="tiny">${a.mis?`الخطأ المفاهيمي: <b>${esc(misById[a.mis].title)}</b> (${a.mis}) · `:""}الطريقة: ${SRC[a.src]||a.src}${a.why?` · ${mathify(a.why)}`:""}</p>
         </div>`;}).join("")}</div></details>`:""}
     </div>
-    <p class="draft">النتيجة تقدير أولي من ${d.count} ألغاز. الصح والغلط بيتحدد بالحساب، والذكاء الاصطناعي بيقترح سبب الغلط وممكن يخطئ. المهارات «الثابتة» ما انختبرت لأنك جاوبت صح على مهارة بتعتمد عليها.</p>
+    <p class="draft">النتيجة تقدير أولي من ${d.count} ألغاز. الصح والغلط بيتحدد بالحساب، والذكاء الاصطناعي بيقترح سبب الغلط وممكن يخطئ. المهارات «المفهومة من جوابك» ما انسألت عنها، لأنك جاوبت صح على مهارة مبنية عليها.</p>
   </section>`;
   const rr=$("#retryrep");if(rr)rr.onclick=()=>{REP.fail=null;vResult();};
   if(!d.report&&!REP.busy&&!REP.fail&&d.answers&&sampleFn)genReport(d,start);
@@ -1172,12 +1173,22 @@ function vPath(){
       <div><p class="eyebrow">مسار ${esc(ME().nick)}</p><h2>${cur?`المحطة الجاية: ${esc(cur.title)}`:"ضوّيت كل الفوانيس!"}</h2></div>
       <span class="chip lit">${litN} من ${pathOf(S).length} فوانيس</span>
     </div>
+    <details class="legend"><summary>شو معنى الكلمات؟</summary><ul class="small muted">
+      <li><b>جاوبتها صح ✦</b>: انسألت عنها بالتشخيص وجاوبت صح.</li>
+      <li><b>مفهومة من جوابك</b>: ما سألناك عنها، بس جاوبت صح على مهارة مبنية عليها.</li>
+      <li><b>متقَنة ✦</b>: ضوّيتها بالتمارين أو بالكويز.</li>
+      <li><b>أنت هنا · مفتوحة</b>: محطات بتقدر تشتغل عليها هلأ.</li>
+      <li><b>بتنفتح بعد…</b>: بتنفتح لما تخلّص المهارة المكتوب رقمها.</li>
+    </ul></details>
     ${LEVELS.map(l=>{const k=litCount(S,l.id),n=SK_LV[l.id].length,later=gradeOf(S)&&l.g>gradeOf(S);return `<div class="lvsec ${later?"later":""}">
       <div class="lvhead"><h3><span class="lvnum">${l.g}</span>${l.name}</h3><span class="small muted">${later?"مستوى جاي":`${k} من ${n}`}</span></div>
       <div class="pbar" aria-hidden="true"><i style="width:${Math.round(k/n*100)}%"></i></div>
       <div class="trail">${SK_LV[l.id].map(id=>{const s=skillById[id],lit=isLit(id),now=cur&&cur.id===id,st=statusOf(S,id);idx++;
         const open=canOpen(id),tag=open?"a":"div";
-        const chip=lit?(st==="assumed"&&!S.lit[id]?["ثابتة ✦","good"]:["متقَنة ✦","lit"]):now?["أنت هنا","lit"]:!inPathP(S,id)?["مستوى جاي","plain"]:open?["مفتوحة","calm"]:["مقفلة","plain"];
+        const waitFor=preOf(id).filter(x=>!isLit(x));
+        const chip=lit?(S.lit[id]?["متقَنة ✦","lit"]:st==="mastered"?["جاوبتها صح ✦","lit"]:["مفهومة من جوابك","good"])
+          :now?["أنت هنا","lit"]:!inPathP(S,id)?["مستوى جاي","plain"]:open?["مفتوحة","calm"]
+          :["بتنفتح بعد "+waitFor.map(x=>skNum(x)).join(" و "),"plain"];
         return `<${tag} class="stop ${lit?"lit":""} ${now?"now":""} ${open?"":"locked"}"${open?` href="#skill-${id}"`:` aria-disabled="true"`}><span class="orb">${LANTERN(lit?"on":"off")}${open?"":LOCK}</span>
           <span class="info"><span class="row between" style="gap:8px"><b><span class="sknum">${skNum(id)}</span>${esc(s.title)}</b><span class="chip ${chip[1]}">${chip[0]}</span></span><span class="small muted">${esc(s.summary)}</span>
           <span class="tiny">${preOf(id).length?"بتعتمد على: "+preOf(id).map(x=>skNum(x)+" "+esc(skillById[x].title)).join("، "):"مهارة أساس، ما بتعتمد على مهارة قبلها"}</span>
@@ -1468,7 +1479,7 @@ function kidCard(k){
     ${d?`<div style="display:grid;gap:10px">
       <div class="row between"><h4 style="margin:0;color:var(--logo)">التشخيص الأولي · ${fmtDate(d.at)}</h4><button class="btn btn-line btn-sm" type="button" data-report="${esc(k.id)}">انسخ التقرير</button></div>
       <p class="small">${d.start&&skillById[d.start]?`بلّش من <b>${esc(skillById[d.start].title)}</b> (${LV[skillById[d.start].lv].name}).`:"متمكّن من كل المهارات اللي انختبرت."} جاوب على ${d.count} ألغاز.</p>
-      ${levelTable(d)}
+      ${levelTable(d,true)}
       ${Object.keys(d.mis||{}).filter(id=>misById[id]).length?`<div style="display:grid;gap:8px"><b class="small">أفكار بنشتغل عليها، وكيف بتساعدوه بالبيت:</b><div class="ideas">${Object.keys(d.mis).filter(id=>misById[id]).map(id=>`<div class="idea">${BULB}<div><b>${esc(misById[id].title)}</b><p class="small muted">${mathify(HINT[id])}</p></div></div>`).join("")}</div></div>`:""}
       ${d.report?`<details class="detail"><summary>تقرير نبراس للطالب (ذكاء اصطناعي)</summary><div class="small" style="display:grid;gap:6px;margin-top:8px">${md(d.report)}</div></details>`:""}
     </div>`:""}
@@ -1530,7 +1541,7 @@ function context(){
   const d=S.diag,L=g?["# سياق الجلسة","- هذه جلسة تجريبية: الزائر معلم يختبر نبراس، وقد يكتب كأنه طالب. تصرّف تماماً كما تتصرف مع طالب في الصف السابع، بنفس طريقة التعليم والحدود.","- لا تقترح لعبة التشخيص ولا المسار، فالزائر ليس له حساب طالب.","- الصف المفترض: السابع"]
     :["# سياق الطالب",`- الاسم المستعار: ${ME().nick} (لا تطلب اسمه الحقيقي)`,`- الصف: ${gradeOf(S)?gradeLv(gradeOf(S)).short:"غير محدد"}`];
   if(g){/* no diagnostic data for a guest */}
-  else if(d){L.push("- نتيجة التشخيص: "+pathOf(S).map(s=>`${s.title} (${LV[s.lv].short}) = ${STATUS[stOf(d,s.id)][0]}`).join("؛ "));
+  else if(d){L.push("- نتيجة التشخيص: "+pathOf(S).map(s=>`${s.title} (${LV[s.lv].short}) = ${STATUS[stOf(d,s.id)][2]}`).join("؛ "));
     const c=currentSkill();L.push(`- المحطة الحالية في مساره: ${c?c.title+" ("+LV[c.lv].name+")":"أتقن كل المهارات"}`);}
   else L.push("- لم يلعب التشخيص بعد. إذا طلب مساعدة عامة اقترح عليه لعبة التشخيص بلطف.");
   const det=Object.entries(S.detected).sort((a,b)=>b[1]-a[1]).map(([id,n])=>`${id} (${n})`);
