@@ -1138,6 +1138,7 @@ function xlBody(sk,xl){
 }
 function vSkill(sid){
   const sk=skillById[sid];
+  const LSN=!!(window.NibrasLesson&&NibrasLesson.has(sid));
   if(!P||P.sid!==sid){const qs=QS.filter(q=>q.skill===sid).sort((a,b)=>a.d-b.d);P={sid,qs,i:0,first:true,state:"ask",fb:null,tried:[],val:null,order:null,items:null,tilt:0};}
   const streak=S.streak[sid]||0,lit=isLit(sid),q=P.qs[P.i],finished=P.i>=P.qs.length;
   const xl=sk.simple&&sk.simplest?Math.max(0,Math.min(2,P.xl|0)):-1;
@@ -1151,12 +1152,15 @@ function vSkill(sid){
     <div class="card explain">
       <p class="eyebrow">${LV[sk.lv].name}</p>
       <h2>${esc(sk.title)}</h2>
+      ${LSN?`<div class="lsn-tabs" role="tablist" aria-label="طريقة الشرح"><button type="button" role="tab" data-lsn="watch" aria-selected="${P.read?"false":"true"}">شاهد الشرح مع نبراس</button><button type="button" role="tab" data-lsn="read" aria-selected="${P.read?"true":"false"}">اقرأ الشرح</button></div><div id="lsnhost"${P.read?" hidden":""}></div>`:""}
+      <div id="xread"${LSN&&!P.read?" hidden":""}>
       ${xl>0?xlBody(sk,xl):`<p>${mathify(sk.explanation)}</p>
       ${sk.learn?`<div class="learn"><b>${BULB}أتعلّم</b><ul>${sk.learn.map(t=>`<li>${mathify(t)}</li>`).join("")}</ul></div>`:""}
       ${sk.figs?`<div class="figbox"><b>أتأمّل الرسومات</b><div class="figs swipe" id="lfigs" tabindex="0" aria-label="رسومات الدرس">${sk.figs.map(x=>figHTML(x.f,x.cap)).join("")}</div>
         <div class="fignav"><button type="button" class="btn btn-line btn-sm" id="fprev">→ السابق</button><span id="fpos" class="small" aria-live="polite"></span><button type="button" class="btn btn-line btn-sm" id="fnext">التالي ←</button></div></div>`:""}
       <div class="example"><b>مثال من الحياة</b><p>${mathify(sk.example)}</p></div>
       ${xl===0?`<div class="xmore"><span>مش فاهم؟</span><button type="button" class="btn btn-go btn-sm" data-xl="1">بسّطلي الشرح</button></div>`:""}`}
+      </div>
       <p class="tiny">${esc(sk.src)}</p>
     </div>
     ${finished?`<div class="card done">${LANTERN("big on")}<h2>${lit?"ضوّيت فانوس هالمحطة!":"خلّصت تمارين المحطة"}</h2><p class="muted">${lit?"يلا على المحطة الجاية.":`بدك تعيد التمارين؟ كل ${MASTER_STREAK} إجابات صح من أول محاولة ورا بعض بتضوّي الفانوس.`}</p>
@@ -1175,6 +1179,9 @@ function vSkill(sid){
       </div>
     </div>`}
   </section>`;
+  /* lesson video: «شاهد» mounts the Nibras player, «اقرأ» shows the written explanation */
+  if(LSN){app.querySelectorAll("[data-lsn]").forEach(b=>b.onclick=()=>{P.read=b.dataset.lsn==="read";vSkill(sid);});
+    if(!P.read)NibrasLesson.mount($("#lsnhost"),sid);}
   /* explanation levels: the «بسّطلي» buttons, the simpler level's steps (place kept between checks), and «اسأل نبراس» */
   app.querySelectorAll("[data-xl]").forEach(b=>b.onclick=()=>{P.xl=+b.dataset.xl;P.xs=0;vSkill(sid);
     const c=app.querySelector(".card.explain");if(c)c.scrollIntoView({block:"start",behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});});

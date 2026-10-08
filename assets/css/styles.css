@@ -830,3 +830,27 @@ body.wide .top{background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-
 .xmore>span{color:var(--ink-2)}
 .xback{border:0;background:none;font:inherit;font-size:.92rem;color:var(--brand-text);text-decoration:underline;text-underline-offset:3px;cursor:pointer;padding:6px 2px}
 :root[data-nb="night"] .xbadge{color:var(--glow)}
+
+/* lesson video with the Nibras avatar (lesson-player.js) */
+.lsn .lsn-player{background:#0E1C47;border-radius:22px;padding:6px;box-shadow:0 26px 50px -26px rgba(11,26,68,.55)}
+.lsn .lsn-player:fullscreen{display:flex;flex-direction:column;justify-content:center;border-radius:0}
+.lsn .lsn-stage{position:relative;aspect-ratio:16/9;max-width:100%;border-radius:16px;overflow:hidden;background:#F6EAD3}
+.lsn .lsn-stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.lsn .lsn-cap{position:absolute;left:8%;right:8%;bottom:4%;text-align:center;pointer-events:none}
+.lsn .lsn-cap span{background:rgba(20,35,79,.86);color:#FFF8EC;font-size:clamp(.78rem,1.9vw,1.08rem);line-height:1.8;padding:4px 14px;border-radius:12px;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.lsn .lsn-big{position:absolute;left:50%;bottom:9%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;background:#1D3A8A;color:#fff;border:0;border-radius:999px;padding:7px 20px 7px 7px;font:800 clamp(.85rem,2.4vw,1.05rem) var(--f-body);cursor:pointer;white-space:nowrap;box-shadow:0 14px 30px -10px rgba(11,26,68,.6)}
+.lsn .lsn-big .lsn-ic{width:clamp(32px,6vw,46px);height:clamp(32px,6vw,46px);border-radius:50%;background:#F4A62A;color:#14234F;display:grid;place-items:center}
+.lsn .lsn-big .lsn-ic svg{width:44%;height:44%;margin-left:8%}
+.lsn .lsn-ctl{display:flex;align-items:center;gap:4px;padding:6px 4px 2px}
+.lsn .lsn-ctl button{width:38px;height:38px;flex:none;border:0;border-radius:10px;background:transparent;color:#FFF8EC;display:grid;place-items:center;cursor:pointer;font:800 .8rem var(--f-body)}
+.lsn .lsn-ctl button:hover{background:rgba(255,255,255,.1)}
+.lsn .lsn-ctl button[aria-pressed="true"]{color:#FFD166}
+.lsn .lsn-ctl svg{width:20px;height:20px}
+.lsn .lsn-ctl .lsn-cc{width:auto;padding-inline:9px;height:28px;border:1.5px solid currentColor;border-radius:7px}
+.lsn .lsn-segs{flex:1;min-width:0;display:flex;gap:3px;padding-inline:6px}
+.lsn .lsn-segs i{flex:1;height:6px;border-radius:4px;background:rgba(255,255,255,.2);overflow:hidden;position:relative}
+.lsn .lsn-segs i b{position:absolute;inset:0 0 0 auto;width:0;background:#F4A62A;border-radius:inherit}
+.lsn-tabs{display:inline-grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:4px;justify-self:start;margin-block:6px 4px}
+.lsn-tabs button{border:0;background:transparent;border-radius:999px;padding:7px 16px;font:800 .95rem var(--f-body);color:var(--ink-2);cursor:pointer}
+.lsn-tabs button[aria-selected="true"]{background:var(--surface);color:var(--logo);box-shadow:0 1px 4px rgba(20,35,79,.12)}
+.lsn{margin-block:6px}
