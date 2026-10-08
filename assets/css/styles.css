@@ -882,3 +882,8 @@ body.wide .top{background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-
 .stop.locked:hover .info{border-color:var(--line)}
 .stop.locked .orb svg.ln{opacity:.45}
 .orb svg.lk{position:absolute;width:24px;height:24px;inset-inline-end:-4px;bottom:-4px;padding:3px;border-radius:50%;background:var(--surface);border:2px solid var(--line);color:var(--ink-3)}
+/* seven islands (grades 1–7): they shrink to fit a phone instead of overflowing */
+.islands{max-width:100%}
+.isle{min-width:0;flex:0 1 74px}
+.isle-link{min-width:4px}
+@media (max-width:560px){.isle .dot{width:34px;height:34px;font-size:1rem;border-width:2px}.isle small{font-size:.66rem}.isle.now .dot{box-shadow:0 0 0 4px var(--glow-soft)}.isle-link{flex-basis:14px;margin-bottom:18px}}

@@ -122,6 +122,60 @@ const FIG=(function(){
       g+=T(pad+cw/2,yB,sub?"−":"+",{size:18,fill:"var(--ink-2)"})+`<line x1="${pad}" y1="${yB+15}" x2="${pad+(n+1)*cw}" y2="${yB+15}" stroke="var(--brand-text)" stroke-width="2" stroke-linecap="round"/>`;
       return{svg:svg(W,yR+16,g,(sub?"طرح عمودي: ":"جمع عمودي: ")+N(a)+(sub?" ناقص ":" زائد ")+N(b),W*1.45),
         cap:sub?`${a} − ${b} = ${res}${crossed.size?": عندما يكون الرقم في الأعلى أصغر، أستلف من المنزلة التي على يساره.":""}`:`${a} + ${b} = ${res}${Object.keys(small).length?": عندما يصبح مجموع منزلة 10 أو أكثر، أحمل 1 إلى المنزلة التالية.":""}`};},
+    /* --- grades 1–3 --- */
+    /* ten frames (grade 1): "tenf:8,5" fills the first frame with 8, then 2 more to make ten, the rest in a second frame;
+       "tenf:7" is one frame. Filled from the right, as the book is read. */
+    tenf(arg){const p=nums(arg),a=p[0]||0,b=p[1]||0;if(!a||a>10||b>10||a+b>20)return null;
+      const tot=a+b,frames=tot>10?2:1,c=24,gap=16,pad=6,fw=5*c,W=pad*2+frames*fw+(frames-1)*gap,H=pad*2+2*c;let g="";
+      for(let f=0;f<frames;f++){const x0=AR?W-pad-(f+1)*fw-f*gap:pad+f*(fw+gap);
+        for(let i=0;i<10;i++){const r=Math.floor(i/5),k=i%5,x=AR?x0+fw-(k+1)*c:x0+k*c,y=pad+r*c,n=f*10+i;
+          g+=`<rect x="${x}" y="${y}" width="${c}" height="${c}" fill="var(--surface)" stroke="var(--brand-text)" stroke-width="1.6"/>`;
+          if(n<tot)g+=`<circle cx="${x+c/2}" cy="${y+c/2}" r="${c*.32}" fill="${n<a?"var(--lamp)":"var(--brand-text)"}"/>`;}}
+      const cap=!b?`العدد ${a}`:tot>10&&a<10?`${a} + ${b} = ${tot}: أكمل العشرة أولاً: ${a} + ${10-a} = 10، ثم 10 + ${tot-10} = ${tot}.`:`${a} + ${b} = ${tot}`;
+      return{svg:svg(W,H,g,b?`${N(a)} زائد ${N(b)} في إطار العشرة`:`${N(a)} في إطار العشرة`),cap};},
+    /* base-ten blocks (grades 1–2): "blocks:245" → 2 hundreds, 4 tens, 5 ones, the biggest on the left as the number is written */
+    blocks(arg){const n=nums(arg)[0];if(!n||n>999)return null;const h=Math.floor(n/100),t=Math.floor(n/10)%10,o=n%10,u=7,gap=10,pad=6;
+      const parts=[];
+      for(let i=0;i<h;i++)parts.push({w:10*u,draw:x=>{let d=`<rect x="${x}" y="${pad}" width="${10*u}" height="${10*u}" fill="var(--glow-soft)" stroke="var(--lamp)" stroke-width="1.8"/>`;for(let k=1;k<10;k++)d+=`<path d="M${x+k*u} ${pad}v${10*u}M${x} ${pad+k*u}h${10*u}" stroke="var(--lamp)" stroke-width=".7"/>`;return d;}});
+      for(let i=0;i<t;i++)parts.push({w:u+2,draw:x=>{let d=`<rect x="${x}" y="${pad}" width="${u}" height="${10*u}" fill="var(--brand-soft)" stroke="var(--brand-text)" stroke-width="1.6"/>`;for(let k=1;k<10;k++)d+=`<path d="M${x} ${pad+k*u}h${u}" stroke="var(--brand-text)" stroke-width=".7"/>`;return d;}});
+      for(let i=0;i<o;i++)parts.push({w:u+3,one:true,draw:x=>`<rect x="${x}" y="${pad+10*u-u-(i%2?0:0)}" width="${u}" height="${u}" fill="var(--surface)" stroke="var(--brand-text)" stroke-width="1.6"/>`});
+      let x=pad,g="",prev=null;parts.forEach((q,i)=>{const kind=q.one?2:q.w>20?0:1;if(prev!==null&&kind!==prev)x+=gap;g+=q.draw(x);x+=q.w+2;prev=kind;});
+      const W=x+pad,H=pad*2+10*u,terms=[h*100,t*10,o].filter(v=>v);
+      return{svg:svg(W,H,g,`العدد ${N(n)} بالمكعبات: ${N(h)} مئات و ${N(t)} عشرات و ${N(o)} آحاد`,Math.min(360,W*1.6)),
+        cap:`${n} = ${terms.join(" + ")}${h?`: ${h} مئات و ${t} عشرات و ${o} آحاد`:`: ${t} عشرات و ${o} آحاد`}`};},
+    /* skip counting on the number line (grade 2): "skip:3,4" → 4 jumps of 3 from 0 */
+    skip(arg){const p=nums(arg),a=p[0],n=p[1];if(!a||!n||a*n>40)return null;const hi=a*n,y=62,marks=[];for(let k=0;k<=n;k++)marks.push(k*a);
+      const L=NL(0,hi,y,{only:marks,mark:[hi]});let g=L.g;const h=Math.min(34,10+a*L.u*.35);
+      for(let k=0;k<n;k++)g+=`<path d="M${r1(L.X(k*a))} ${y-9}Q${r1(L.X(k*a+a/2))} ${r1(y-9-h*1.5)} ${r1(L.X(k*a+a))} ${y-9}" fill="none" stroke="var(--brand-text)" stroke-width="2.4" stroke-linecap="round"/>`;
+      g+=`<circle cx="${r1(L.X(hi))}" cy="${y}" r="6" fill="var(--lamp)" stroke="var(--surface)" stroke-width="2"/>`;
+      return{svg:svg(L.W,92,g,`${N(n)} قفزات طول كل قفزة ${N(a)}`),cap:`${Array(n).fill(a).join(" + ")} = ${n} × ${a} = ${hi}`};},
+    /* rounding (grade 3): "round:368,10" → where 368 sits between 360 and 370, and which one is nearer */
+    round(arg){const p=nums(arg),n=p[0],st=p[1];if(!n||![10,100,1000].includes(st)||n%st===0)return null;const lo=Math.floor(n/st)*st,hi=lo+st,up=n-lo>=st/2,to=up?hi:lo;
+      const pad=34,W=320,y=56,X=v=>pad+(v-lo)/st*(W-pad*2);let g=`<line x1="${pad-12}" y1="${y}" x2="${W-pad+12}" y2="${y}" stroke="var(--ink-3)" stroke-width="2.4" stroke-linecap="round"/>`;
+      for(let k=0;k<=10;k++){const v=lo+k*st/10,big=k===0||k===5||k===10;g+=`<line x1="${r1(X(v))}" y1="${y-(big?9:5)}" x2="${r1(X(v))}" y2="${y+(big?9:5)}" stroke="var(--ink-3)" stroke-width="${big?2.4:1.5}"/>`;}
+      [lo,hi].forEach(v=>{g+=T(X(v),y+24,N(v),{size:14,fill:v===to?"var(--brand-text)":"var(--ink)"});});if(n!==lo+st/2)g+=T(X(lo+st/2),y+24,N(lo+st/2),{size:11,w:700,fill:"var(--ink-3)"});
+      g+=`<path d="M${r1(X(n))} ${y-12}Q${r1((X(n)+X(to))/2)} ${y-34} ${r1(X(to))} ${y-12}" fill="none" stroke="var(--brand-text)" stroke-width="2.2" stroke-dasharray="4 3" stroke-linecap="round"/>`;
+      g+=`<circle cx="${r1(X(n))}" cy="${y}" r="6.5" fill="var(--lamp)" stroke="var(--surface)" stroke-width="2"/>`+T(X(n),y-22,N(n),{size:14,fill:"var(--lamp)"});
+      return{svg:svg(W,92,g,`${N(n)} بين ${N(lo)} و ${N(hi)}`),cap:n-lo===st/2?`${n} في المنتصف تماماً بين ${lo} و ${hi}، والرقم على يمين المنزلة 5، فيُقرّب إلى ${hi}.`:`${n} أقرب إلى ${to} منه إلى ${up?lo:hi}، فيُقرّب إلى ${to}.`};},
+    /* rows of dots (grades 2–3): "grid:3,4" → 3 rows, 4 in each row */
+    grid(arg){const p=nums(arg),r=p[0],c=p[1];if(!r||!c||r>10||c>10)return null;const s=22,pad=8,W=pad*2+c*s,H=pad*2+r*s;let g="";
+      for(let i=0;i<r;i++){g+=`<rect x="${pad-3}" y="${pad+i*s+1}" width="${c*s+6}" height="${s-2}" rx="${(s-2)/2}" fill="${i%2?"var(--surface)":"var(--glow-soft)"}"/>`;
+        for(let j=0;j<c;j++)g+=`<circle cx="${pad+j*s+s/2}" cy="${pad+i*s+s/2}" r="${s*.3}" fill="var(--brand-text)"/>`;}
+      return{svg:svg(W,H,g,`${N(r)} صفوف في كل صف ${N(c)}`,Math.min(300,W*1.5)),cap:`${r} صفوف، في كل صف ${c}: ${r} × ${c} = ${r*c}`};},
+    /* equal sharing (grades 2–3): "share:12,3" → 12 things shared on 3 plates */
+    share(arg){const p=nums(arg),n=p[0],k=p[1];if(!n||!k||k>6||n%k||n/k>12)return null;const q=n/k,per=Math.min(q,4),rows=Math.ceil(q/per),s=16,pw=per*s+18,ph=rows*s+18,gap=10,pad=4,W=pad*2+k*pw+(k-1)*gap,H=pad*2+ph;let g="";
+      for(let i=0;i<k;i++){const x0=AR?W-pad-(i+1)*pw-i*gap:pad+i*(pw+gap);g+=`<rect x="${x0}" y="${pad}" width="${pw}" height="${ph}" rx="${Math.min(pw,ph)/2.4}" fill="var(--brand-soft)" stroke="var(--brand-text)" stroke-width="1.8"/>`;
+        for(let j=0;j<q;j++){const r=Math.floor(j/per),c=j%per;g+=`<circle cx="${x0+9+c*s+s/2}" cy="${pad+9+r*s+s/2}" r="${s*.3}" fill="var(--lamp)"/>`;}}
+      return{svg:svg(W,H,g,`${N(n)} موزعة على ${N(k)} مجموعات بالتساوي`,Math.min(360,W*1.5)),cap:`${n} ÷ ${k} = ${q}: في كل مجموعة ${q}.`};},
+    /* fraction bars (grades 2–3): "fbar:3/4" or "fbar:1/2,2/4,4/8" (same length, one under the other), shaded from the right */
+    fbar(arg){const fs=String(arg||"").split(",").map(frac).filter(Boolean);if(!fs.length||fs.length>4||fs.some(([a,b])=>!b||b>12||a>b))return null;
+      const bw=240,bh=30,gap=10,lab=40,pad=6,W=pad*2+bw+lab,H=pad*2+fs.length*bh+(fs.length-1)*gap,bx=AR?pad+lab:pad;let g="";
+      fs.forEach(([a,b],i)=>{const y=pad+i*(bh+gap),cw=bw/b;
+        for(let k=0;k<b;k++){const x=AR?bx+bw-(k+1)*cw:bx+k*cw;g+=`<rect x="${r1(x)}" y="${y}" width="${r1(cw)}" height="${bh}" fill="${k<a?"var(--lamp)":"var(--surface)"}" stroke="var(--brand-text)" stroke-width="1.8"/>`;}
+        g+=F(AR?pad+lab/2:pad+bw+lab/2,y+bh/2,a,b,{size:12});});
+      const v=([a,b])=>a/b,same=fs.every(f=>Math.abs(v(f)-v(fs[0]))<1e-9),S=([a,b])=>`${a}/${b}`;
+      const cap=fs.length===1?`${S(fs[0])}: ${fs[0][0]} من ${fs[0][1]} أجزاء متساوية`:same?`${fs.map(S).join(" = ")}: الأجزاء المظللة لها الطول نفسه.`:`الشريط الذي جزؤه المظلل أطول يمثل الكسر الأكبر.`;
+      return{svg:svg(W,H,g,"أشرطة كسور"),cap};},
     tree(arg){const ns=nums(arg);if(!ns.length)return null;const b=sideBySide((AR?ns.slice().reverse():ns).map(treeG),18);
       return{svg:svg(b.W,b.H,b.g,"شجرة العوامل الأولية للعدد "+ns.map(N).join(" و ")),cap:ns.map(n=>`${n} = ${primes(n).join(" × ")}`).join("  ،  ")};},
     ladder(arg){const ns=nums(arg);if(!ns.length)return null;const b=sideBySide((AR?ns.slice().reverse():ns).map(ladderG),26);

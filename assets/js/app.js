@@ -26,7 +26,7 @@ const quizOf=(p,sid)=>(p.quiz||{})[sid]||null;
 const STAR=on=>`<svg class="star${on?" on":""}" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2l-5.7 3.1 1.2-6.4L2.8 9.5l6.4-.8z"/></svg>`;
 const starsHTML=k=>`<span class="stars" role="img" aria-label="${k} من 3 نجوم">${[1,2,3].map(i=>STAR(i<=k)).join("")}</span>`;
 const gradeChip=k=>`<span class="chip ${GRADES[k][1]}">${GRADES[k][0]}</span>`;
-const DIAG_PICK={s4a:["q4a1","q4a3"],s4b:["q4b2","q4b1"],s4c:["q4c1","q4c3"],s4d:["q4d2","q4d1"],s5a:["q5a1","q5a2"],s5b:["q5b1","q5b2"],s5c:["q5c1","q5c2"],s6a:["q6a2","q6a1"],s6b:["q6b2","q6b1"],s6c:["q6c2","q6c1"],s7a:["q7a2","q7a1"],s7b:["q7b1","q7b2"],s7c:["q7c2","q7c1"],s7d:["q7d2","q7d5"]};
+const DIAG_PICK={s1a:["q1a5","q1a2"],s1b:["q1b2","q1b3"],s1c:["q1c1","q1c2"],s2a:["q2a2","q2a5"],s2b:["q2b1","q2b2"],s2c:["q2c3","q2c1"],s2d:["q2d2","q2d3"],s3a:["q3a2","q3a4"],s3b:["q3b1","q3b2"],s3c:["q3c3","q3c1"],s3d:["q3d2","q3d5"],s4a:["q4a1","q4a3"],s4b:["q4b2","q4b1"],s4c:["q4c1","q4c3"],s4d:["q4d2","q4d1"],s5a:["q5a1","q5a2"],s5b:["q5b1","q5b2"],s5c:["q5c1","q5c2"],s6a:["q6a2","q6a1"],s6b:["q6b2","q6b1"],s6c:["q6c2","q6c1"],s7a:["q7a2","q7a1"],s7b:["q7b1","q7b2"],s7c:["q7c2","q7c1"],s7d:["q7d2","q7d5"]};
 const LET=["أ","ب","ج","د"];
 const DAILY_LIMIT=30, MASTER_STREAK=3;
 
@@ -948,7 +948,8 @@ function record(val,skipped){
   const sid=q.skill;
   if(G.stage==="first"){
     if(r.ok){G.res[sid]="mastered";return nextSkill();}
-    const f=followUp(sid);if(!f){G.res[sid]="gap";return nextSkill();}
+    /* a second question only from grade 4 up, so a long way down to grade 1 stays short */
+    const f=LV[G.lv].g>=4?followUp(sid):null;if(!f){G.res[sid]="gap";return nextSkill();}
     G.stage="follow";setQ(f);return drawGame();
   }
   G.res[sid]=r.ok?"partial":"gap";return nextSkill();
@@ -1010,11 +1011,11 @@ function vPlay(){
   app.innerHTML=`<section class="game"><div class="card" style="display:grid;gap:14px">
     <p class="eyebrow">أهلاً ${esc(ME().nick)}</p>
     <h2>رحلة الفوانيس</h2>
-    <p class="muted">رحلتك فيها ${arNum(LEVELS.length)} جزر: ${LEVELS.map(l=>"جزيرة "+l.short).join("، ")}. بنبلّش من جزيرة السادس: إذا مشيت فيها منيح بنطلع لجزيرة السابع، وإذا صعبت عليك بننزل جزيرة جزيرة لتحت لحد ما نلاقي من وين تبلّش.</p>
+    <p class="muted">رحلتك فيها ${arNum(LEVELS.length)} جزر، من جزيرة ${LEVELS[0].short} لجزيرة ${LEVELS[LEVELS.length-1].short}. بنبلّش من جزيرة السادس: إذا مشيت فيها منيح بنطلع لجزيرة السابع، وإذا صعبت عليك بننزل جزيرة جزيرة لتحت لحد ما نلاقي من وين تبلّش.</p>
     <div class="islands" aria-hidden="true">${LEVELS.map((l,i)=>`${i?'<span class="isle-link"></span>':""}<div class="isle ${l.id==="L6"?"now":""}"><span class="dot">${l.g}</span><small>${l.short}</small></div>`).join("")}</div>
     <div class="row" style="justify-content:center;gap:8px">${Object.keys(TYPE_NAME).map(t=>`<span class="chip calm"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${TYPE_IC[t]}</svg>${TYPE_NAME[t]}</span>`).join("")}</div>
     <ul class="muted small" style="margin:0;padding-inline-start:1.2em">
-      <li>عدد الألغاز بيتغيّر حسب أجوبتك: تقريباً من 7 لـ 20 لغز، وبتاخد حوالي 10 لـ 15 دقيقة.</li>
+      <li>عدد الألغاز بيتغيّر حسب أجوبتك: أقل شي 7 ألغاز، وكل ما نزلنا جزيرة بيزيدوا شوي.</li>
       <li>ما في وقت ولا علامات. الهدف نعرف من وين نبلّش.</li>
       <li>نبراس (ذكاء اصطناعي) بيحلل أجوبتك الغلط عشان يعرف <b>ليش</b> صارت، وبيكتبلك تقرير بالآخر.</li>
     </ul>
@@ -1075,7 +1076,7 @@ const SRC={math:"تحقق حسابي",match:"مطابقة مع مكتبة الأ
 const REP={busy:false,text:"",ctl:null,fail:null};
 function reportPrompt(d,start,nick){
   const ans=(d.answers||[]).map(a=>{const q=qById[a.qid];return `- [${q?skillById[q.skill].title:""}] ${q?arProse(q.stem):a.qid} | جواب الطالب: ${arProse(a.a)} | ${a.ok?"صحيح":"خطأ"}${a.mis?` | الخطأ المفاهيمي: ${misById[a.mis].title}`:""}${a.why?` | ملاحظة: ${a.why}`:""}`;}).join("\n");
-  return `أنت «نبراس»، معلم رياضيات فلسطيني دافئ. اكتب لطالب في الصف السابع (اسمه المستعار: ${nick}) تقريراً قصيراً عن نتيجة لعبة التشخيص التي أنهاها الآن. اللعبة تختبر مهارات من الصف الرابع حتى السابع.
+  return `أنت «نبراس»، معلم رياضيات فلسطيني دافئ. اكتب لطالب في الصف السابع (اسمه المستعار: ${nick}) تقريراً قصيراً عن نتيجة لعبة التشخيص التي أنهاها الآن. اللعبة تختبر مهارات من الصف الأول حتى السابع.
 
 القواعد:
 - لهجة فلسطينية بسيطة ومشجّعة، من 60 إلى 100 كلمة، فقرتان قصيرتان، بدون عناوين أو قوائم.
@@ -1456,7 +1457,7 @@ function kidCard(k){
 }
 
 
-const PROMPT=`أنت «نبراس»، معلم رياضيات افتراضي فلسطيني صبور ودافئ على منصة «نبراس · تعلّم من مستواك» لتعويض الفاقد التعليمي. تساعد طلبة الصف السابع في المدارس الحكومية بالضفة الغربية في مهارات الأعداد والكسور والنسبة والجبر، من مستوى الصف الرابع حتى السابع. تتبع منهجية التعليم حسب المستوى الفعلي (Teaching at the Right Level): تبدأ من مستوى الطالب الحقيقي، لا من مستوى صفّه.
+const PROMPT=`أنت «نبراس»، معلم رياضيات افتراضي فلسطيني صبور ودافئ على منصة «نبراس · تعلّم من مستواك» لتعويض الفاقد التعليمي. تساعد طلبة الصف السابع في المدارس الحكومية بالضفة الغربية في مهارات الأعداد والكسور والنسبة والجبر، من مستوى الصف الأول حتى السابع. تتبع منهجية التعليم حسب المستوى الفعلي (Teaching at the Right Level): تبدأ من مستوى الطالب الحقيقي، لا من مستوى صفّه.
 
 # شخصيتك ولغتك
 - تحكي بلهجة فلسطينية بسيطة ومهذبة («يا بطل»، «يلا نجرب سوا»، «ولا يهمك»)، وتكتب المصطلحات الرياضية بالفصحى (متغير، معامل، حدود متشابهة، خاصية التوزيع، معادلة).
@@ -1510,7 +1511,7 @@ function context(){
   if(det.length)L.push("- أخطاء مفاهيمية لوحظت سابقاً: "+det.join("، "));
   L.push("","# مكتبة الأخطاء المفاهيمية");
   MIS.forEach(m=>L.push(`- ${m.id}: ${m.title}. ${arProse(m.description)} مثال: ${arProse(m.example)} علاج مقترح: ${arProse(HINT[m.id])}`));
-  L.push("","# مهارات المسار (مسودة، مرتبة من الصف الرابع للسابع)");
+  L.push("","# مهارات المسار (مسودة، مرتبة من الصف الأول للسابع)");
   SKILLS.forEach(s=>L.push(`- ${s.title} (${LV[s.lv].name}): ${arProse(s.explanation)} مثال: ${arProse(s.example)}${s.learn?" قواعد الكتاب المدرسي لهذه المهارة (التزم بطريقتها ومصطلحاتها عند الشرح): "+s.learn.map(arProse).join(" "):""}`));
   return L.join("\n");
 }
