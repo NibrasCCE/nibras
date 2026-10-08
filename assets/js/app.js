@@ -369,6 +369,8 @@ function bindSession(){
   const u=ME();
   if(u&&u.role==="teacher"){S=GUEST_S||(GUEST_S=guestProgress());return;}
   GUEST_S=null;S=u&&u.role==="student"?Store.progress():null;
+  /* a diagnosis from before the grade-based one (no v:2) is dropped: the student plays the new one */
+  if(S&&S.diag&&S.diag.v!==2)S.diag=null;
 }
 const save=()=>Store.save();
 function parseIdent(raw){
@@ -381,29 +383,41 @@ function parseIdent(raw){
 
 /* ---------- learning state helpers ---------- */
 function bump(mid){if(S&&misById[mid])S.detected[mid]=(S.detected[mid]||0)+1;}
-/* a level the diagnosis did not reach counts as "assumed" (ثابتة) when a higher grade level was passed.
-   This also covers diagnoses saved before a grade was added (e.g. grade 4). */
+/* the student's grade (1–7), chosen at sign-up; the path holds the skills up to that grade */
+const gradeOf=p=>p&&p.grade>=1&&p.grade<=LEVELS[LEVELS.length-1].g?p.grade:0;
+const gradeLv=g=>LEVELS.find(l=>l.g===g);
+const inPathP=(p,sid)=>{const g=gradeOf(p);return !g||LV[skillById[sid].lv].g<=g;};
+const pathOf=p=>SKILLS.filter(s=>inPathP(p,s.id));
+const diagOf=p=>p&&p.diag&&p.diag.v===2?p.diag:null;
+/* old diagnoses (before v:2) also had lvPass; kept so an old record still reads */
 const assumedBy=(lvPass,lv)=>Object.entries(lvPass||{}).some(([l,ok])=>ok&&LV[l]&&LV[l].g>LV[lv].g);
 const stOf=(d,sid)=>d.skills[sid]||(assumedBy(d.lvPass,skillById[sid].lv)?"assumed":"untested");
-const statusOf=(p,sid)=>p.diag?stOf(p.diag,sid):null;
+const statusOf=(p,sid)=>diagOf(p)?stOf(p.diag,sid):null;
 const isLitP=(p,sid)=>!!p.lit[sid]||["mastered","assumed"].includes(statusOf(p,sid));
 const isLit=sid=>isLitP(S,sid);
-const currentSkillP=p=>SKILLS.find(s=>!isLitP(p,s.id))||null;
+const currentSkillP=p=>pathOf(p).find(s=>!isLitP(p,s.id))||null;
 const currentSkill=()=>currentSkillP(S);
-/* the path opens one station at a time: a skill opens only when it is lit, or it is the next station
-   (every skill before it in the path is lit). */
-const canOpen=id=>{const c=currentSkill();return !c||isLit(id)||c.id===id;};
+/* prerequisite lock: after the diagnosis a skill opens when every skill it builds on is lit.
+   Skills above the student's grade open only when the whole path is lit. */
+const preLitP=(p,sid)=>preOf(sid).every(x=>isLitP(p,x));
+const canOpenP=(p,id)=>{if(!diagOf(p))return false;if(isLitP(p,id))return true;if(!inPathP(p,id))return !currentSkillP(p)&&preLitP(p,id);return preLitP(p,id);};
+const canOpen=id=>canOpenP(S,id);
 function vLocked(sid){
   const c=currentSkill(),sk=skillById[sid];
   app.innerHTML=`<section class="view"><div class="card locked" style="display:grid;gap:12px">
     <div class="row between"><a class="btn btn-line btn-sm" href="#path">← مساري</a><span class="chip plain">مقفلة</span></div>
     <p class="eyebrow">${LV[sk.lv].name} · مهارة ${skNum(sid)}</p>
     <h2><span class="sknum">${skNum(sid)}</span>${esc(sk.title)}</h2>
-    <p class="muted">${S.diag?`هالمهارة لسا مقفلة. بتنفتح لما تخلّص المحطات اللي قبلها. محطتك هلأ: <b>${skNum(c.id)} ${esc(c.title)}</b>.`:"هالمهارة لسا مقفلة. العب رحلة الفوانيس أول عشان نعرف من وين تبلّش."}</p>
-    <div>${S.diag?`<a class="btn btn-go" href="#skill-${c.id}">روح لمحطتك</a>`:`<a class="btn btn-go" href="#play">ابدأ اللعبة</a>`}</div>
+    <p class="muted">${!S.diag?"هالمهارة لسا مقفلة. العب رحلة الفوانيس أول عشان نعرف من وين تبلّش."
+      :!inPathP(S,sid)?"هاي مهارة من مستوى أعلى من صفك. بتنفتح لما تخلّص مسارك."
+      :`هالمهارة بتنفتح لما تخلّص المهارات اللي بتعتمد عليها: ${preOf(sid).filter(x=>!isLit(x)).map(x=>`<b>${skNum(x)} ${esc(skillById[x].title)}</b>`).join("، ")}.`}</p>
+    <div>${!S.diag?`<a class="btn btn-go" href="#play">ابدأ اللعبة</a>`:c?`<a class="btn btn-go" href="#skill-${c.id}">روح لمحطتك</a>`:`<a class="btn btn-go" href="#path">مساري</a>`}</div>
   </div></section>`;
 }
-const litCount=(p,lv)=>(lv?SK_LV[lv]:SKILLS.map(s=>s.id)).filter(id=>isLitP(p,id)).length;
+const litCount=(p,lv)=>(lv?SK_LV[lv]:pathOf(p).map(s=>s.id)).filter(id=>isLitP(p,id)).length;
+/* the grade picker: one button per grade */
+const gradePick=sel=>`<div class="gpick" role="radiogroup" aria-label="الصف">${LEVELS.map(l=>`<button type="button" role="radio" aria-checked="${sel===l.g}" data-g="${l.g}"><b>${arNum(l.g)}</b><small>${l.short}</small></button>`).join("")}</div>`;
+function bindGradePick(host,on){host.querySelectorAll(".gpick button").forEach(b=>b.onclick=()=>{host.querySelectorAll(".gpick button").forEach(x=>x.setAttribute("aria-checked",String(x===b)));beep("pop");on(+b.dataset.g);});}
 const STATUS={mastered:["متمكّن","lit"],assumed:["ثابتة","good"],partial:["بدها تقوية","calm"],gap:["رح نشتغل عليها","calm"],untested:["لسا ما وصلناها","plain"]};
 const fmtDate=iso=>{try{return new Date(iso).toLocaleDateString("ar-PS-u-nu-latn",{day:"numeric",month:"long"});}catch(e){return String(iso).slice(0,10);}};
 const fmtTime=iso=>{try{return new Date(iso).toLocaleString("ar-PS-u-nu-latn",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});}catch(e){return String(iso).slice(0,16);}};
@@ -412,17 +426,18 @@ const fmtN=k=>arNum(k<0?"−"+Math.abs(k):String(k));
 /* ---------- parent notifications (simulated sending) ---------- */
 function composeMsg(stu,kind,extra,ch){const m=composeMsg0(stu,kind,extra,ch);return m?{subject:arNum(m.subject),body:arNum(m.body)}:m;}
 function composeMsg0(stu,kind,extra,ch){
-  const p=stu.progress,nick=stu.nick,d=p.diag;
+  const p=stu.progress,nick=stu.nick,d=diagOf(p);
   const lines=[];let subject="";
   if(kind==="diag"&&d){
     const start=d.start?skillById[d.start]:null;
-    const good=SKILLS.filter(s=>stOf(d,s.id)==="mastered").map(s=>s.title);
-    const weak=SKILLS.filter(s=>["partial","gap"].includes(stOf(d,s.id))).map(s=>s.title);
+    const good=pathOf(p).filter(s=>stOf(d,s.id)==="mastered").map(s=>s.title);
+    const weak=pathOf(p).filter(s=>["partial","gap"].includes(stOf(d,s.id))).map(s=>s.title);
     const ideas=Object.keys(d.mis||{}).map(id=>misById[id].title);
     subject=`نبراس · تقرير التشخيص الأولي لـ ${nick}`;
     if(ch==="sms")return{subject,body:`نبراس: ${nick} خلّص التشخيص الأولي. ${start?`البداية من «${start.title}» (${LV[start.lv].name}).`:"متمكّن من كل المهارات المختبرة."} التفاصيل بصفحة الأهالي.`};
     lines.push("مرحباً،",`${nick} خلّص لعبة التشخيص الأولي على نبراس بتاريخ ${fmtDate(d.at||new Date().toISOString())}.`,"");
-    lines.push(`• المستوى الحالي: ${start?LV[start.lv].name:"فوق كل المستويات المختبرة"}`);
+    if(gradeOf(p))lines.push(`• الصف: ${gradeLv(gradeOf(p)).short}`);
+    lines.push(`• أقدم فجوة: ${start?LV[start.lv].name:"ما في فجوات بالمهارات المختبرة"}`);
     if(start)lines.push(`• نقطة البداية: ${start.title}`);
     lines.push(`• متمكّن من: ${good.length?good.join("، "):"—"}`);
     if(weak.length)lines.push(`• بحاجة لتقوية: ${weak.join("، ")}`);
@@ -431,8 +446,8 @@ function composeMsg0(stu,kind,extra,ch){
   }else if(kind==="skill"){
     const s=skillById[extra.skill];
     subject=`نبراس · ${nick} أتقن مهارة جديدة`;
-    if(ch==="sms")return{subject,body:`نبراس: مبروك! ${nick} أتقن «${s.title}». صار ضاوي ${litCount(p)} من ${SKILLS.length} فوانيس.`};
-    lines.push("مبروك!",`${nick} أتقن مهارة «${s.title}» (${LV[s.lv].name}) بعد ${MASTER_STREAK} إجابات صحيحة متتالية من أول محاولة.`,`صار ضاوي ${litCount(p)} من ${SKILLS.length} فوانيس بمساره.`);
+    if(ch==="sms")return{subject,body:`نبراس: مبروك! ${nick} أتقن «${s.title}». صار ضاوي ${litCount(p)} من ${pathOf(p).length} فوانيس.`};
+    lines.push("مبروك!",`${nick} أتقن مهارة «${s.title}» (${LV[s.lv].name}) بعد ${MASTER_STREAK} إجابات صحيحة متتالية من أول محاولة.`,`صار ضاوي ${litCount(p)} من ${pathOf(p).length} فوانيس بمساره.`);
   }else if(kind==="level"){
     const l=LV[extra.level],nx=currentSkillP(p);
     subject=`نبراس · ${nick} أنهى ${l.name}`;
@@ -442,7 +457,7 @@ function composeMsg0(stu,kind,extra,ch){
     subject=`نبراس · تم ربط حساب ${nick}`;
     const st=d?(d.start?`نقطة البداية حالياً: ${skillById[d.start].title}.`:"متمكّن من كل المهارات المختبرة."):"لسا ما لعب لعبة التشخيص.";
     if(ch==="sms")return{subject,body:`نبراس: تم ربط حساب ${nick} بحسابك. ${st}`};
-    lines.push(`تم ربط حساب ${nick} بحسابك على نبراس.`,st,`الفوانيس المضاءة: ${litCount(p)} من ${SKILLS.length}.`);
+    lines.push(`تم ربط حساب ${nick} بحسابك على نبراس.`,st,`الفوانيس المضاءة: ${litCount(p)} من ${pathOf(p).length}.`);
   }
   lines.push("","(نموذج تجريبي، والمحتوى مسودة بانتظار مراجعة معلم رياضيات.)");
   return{subject,body:lines.join("\n")};
@@ -686,7 +701,7 @@ async function guestTeacher(){
 }
 
 /* ---------- auth (demo accounts on this device) ---------- */
-const AUTH={mode:"login",av:"cat",err:"",busy:false};
+const AUTH={mode:"login",av:"cat",err:"",busy:false,grade:0};
 function vAuth(role){
   const isS=role==="student",signup=AUTH.mode==="signup";
   const picks=["نجمة","صقر","قمر","فارس","زيتونة","برق"];
@@ -698,6 +713,7 @@ function vAuth(role){
       <div class="field"><label for="ident">الإيميل أو رقم الجوال</label><input id="ident" dir="ltr" inputmode="email" autocomplete="username" placeholder="name@mail.com أو 059xxxxxxx"></div>
       <div class="field"><label for="pw">كلمة السر</label><div class="pw"><input id="pw" type="password" dir="ltr" autocomplete="${signup?"new-password":"current-password"}" minlength="6" placeholder="${signup?"6 أحرف أو أكثر":""}"><button type="button" id="pwshow">إظهار</button></div></div>
       ${signup&&isS?`<div class="field"><label for="nick">اسم مستعار</label><input id="nick" maxlength="16" autocomplete="off" placeholder="اختار اسم أو اكتب واحد"><div class="picks" aria-label="أسماء مقترحة">${picks.map(p=>`<button type="button" data-p="${p}">${p}</button>`).join("")}</div><span class="tiny">لا تكتب اسمك الحقيقي.</span></div>
+        <div class="field"><span style="font-weight:800">صفي هلأ</span>${gradePick(AUTH.grade)}<span class="tiny">بنبلّش التشخيص بمهارات صفك، وبنرجع للمهارات اللي قبلها إذا احتجنا.</span></div>
         <div class="field"><span style="font-weight:800">اختار شخصيتك</span><div class="avs" role="radiogroup" aria-label="الشخصيات">${AVATARS.map(a=>`<button type="button" class="av" role="radio" aria-checked="${AUTH.av===a.id}" data-av="${a.id}">${avatar(a.id)}<span>${a.name}</span></button>`).join("")}</div></div>`:""}
       ${signup&&!isS?`<div class="field"><label for="code">رمز ربط ابنك/بنتك (اختياري)</label><input id="code" dir="ltr" maxlength="6" autocomplete="off" placeholder="مثلاً: K7M2QX" style="text-transform:uppercase"><span class="tiny">الرمز بيلاقيه الطالب بصفحة «حسابي». بتقدر تضيفه بعدين.</span></div>`:""}
       ${AUTH.err?`<div class="err" role="alert">${esc(AUTH.err)}</div>`:""}
@@ -708,6 +724,7 @@ function vAuth(role){
   </div></section>`;
   app.querySelectorAll(".segtabs button").forEach(b=>b.onclick=()=>{AUTH.mode=b.dataset.m;AUTH.err="";vAuth(role);});
   app.querySelectorAll(".picks button").forEach(b=>b.onclick=()=>{$("#nick").value=b.dataset.p;});
+  bindGradePick(app,g=>{AUTH.grade=g;});
   app.querySelectorAll(".av").forEach(b=>b.onclick=()=>{AUTH.av=b.dataset.av;app.querySelectorAll(".av").forEach(x=>x.setAttribute("aria-checked",String(x===b)));app.querySelector(".avatar-md").innerHTML=avatar(AUTH.av);beep("pop");});
   $("#pwshow").onclick=()=>{const p=$("#pw");p.type=p.type==="password"?"text":"password";$("#pwshow").textContent=p.type==="password"?"إظهار":"إخفاء";};
   $("#af").addEventListener("submit",async e=>{
@@ -718,7 +735,7 @@ function vAuth(role){
     if(!id)return fail("اكتب إيميل صحيح أو رقم جوال (9 أرقام أو أكثر).");
     if(pw.length<6)return fail("كلمة السر لازم تكون 6 أحرف أو أكثر.");
     let nick="";
-    if(signup&&isS){nick=keep.nick.trim();if(!nick)return fail("اختار اسم مستعار.");}
+    if(signup&&isS){nick=keep.nick.trim();if(!nick)return fail("اختار اسم مستعار.");if(!AUTH.grade)return fail("اختار صفك.");}
     AUTH.busy=true;
     const sb=app.querySelector('#af button[type="submit"]');if(sb){sb.disabled=true;sb.textContent="لحظة…";}
     let r;
@@ -728,6 +745,7 @@ function vAuth(role){
     }catch(err){console.error(err);r={ok:false,err:"ما قدرنا نوصل للخادم. تأكد من الإنترنت وجرّب مرة ثانية."};}
     if(!r||!r.ok)return fail(r&&r.err||"صار خطأ.");
     AUTH.busy=false;AUTH.err="";PV.kids=null;PV.err="";
+    if(signup&&role==="student"&&AUTH.grade){const pr=Store.progress();if(pr){pr.grade=AUTH.grade;Store.save();}AUTH.grade=0;}
     if(signup){AUTH.mode="login";beep("win");const u=ME();toast(r.warn?r.warn:(role==="student"?"أهلاً "+u.nick+"! حسابك جاهز":"حسابك جاهز"));}
     else beep("ding");
     const target=role==="student"?"#home":"#parent";
@@ -742,13 +760,13 @@ function vHome(){
     <div class="hero">
       <span class="avatar-lg">${avatar(u.avatar)}</span>
       <h1>أهلاً ${esc(u.nick)}!</h1>
-      <p class="lead">${d?(cur?`محطتك الجاية: <b style="color:var(--logo)">${esc(cur.title)}</b> (${LV[cur.lv].name}).`:"ضوّيت كل الفوانيس! جرّب تتحدّى حالك مع نبراس."):"خلينا نكتشف مستواك بلعبة قصيرة: ${arNum(LEVELS.length)} جزر، وألغاز بتتغيّر حسب جوابك."}</p>
+      <p class="lead">${d?(cur?`محطتك الجاية: <b style="color:var(--logo)">${esc(cur.title)}</b> (${LV[cur.lv].name}).`:"ضوّيت كل الفوانيس! جرّب تتحدّى حالك مع نبراس."):"خلينا نكتشف من وين تبلّش بلعبة قصيرة، ألغازها بتتغيّر حسب جوابك."}</p>
       <div class="row" style="justify-content:center">
         <a class="btn btn-go" href="#${d?(cur?"skill-"+cur.id:"path"):"play"}">${d?"كمّل رحلتك":"ابدأ اللعبة"}</a>
         <a class="btn btn-line" href="#ask">اسأل نبراس</a>
       </div>
     </div>
-    <div class="lvgrid">${LEVELS.map(l=>{const n=SK_LV[l.id].length,k=litCount(S,l.id);return `<div class="lvbox"><div class="row between"><h4>${l.name}</h4><span class="chip ${k===n?"lit":"plain"}">${k} من ${n}</span></div><div class="pbar" aria-hidden="true"><i style="width:${Math.round(k/n*100)}%"></i></div></div>`;}).join("")}</div>
+    <div class="lvgrid">${LEVELS.filter(l=>!gradeOf(S)||l.g<=gradeOf(S)).map(l=>{const n=SK_LV[l.id].length,k=litCount(S,l.id);return `<div class="lvbox"><div class="row between"><h4>${l.name}</h4><span class="chip ${k===n?"lit":"plain"}">${k} من ${n}</span></div><div class="pbar" aria-hidden="true"><i style="width:${Math.round(k/n*100)}%"></i></div></div>`;}).join("")}</div>
     <p class="draft">المحتوى مسودة بانتظار مراجعة معلم رياضيات ومطابقته مع المنهاج.</p>
   </section>`;
 }
@@ -758,7 +776,8 @@ function vMe(){
   const u=ME(),pc=Store.parentCount();
   app.innerHTML=`<section class="view">
     <div class="card" style="display:grid;gap:16px">
-      <div class="kidhead"><span class="avatar-lg">${avatar(u.avatar)}</span><div class="grow"><p class="eyebrow">حسابي</p><h2>${esc(u.nick)}</h2><p class="small muted">الصف السابع</p></div></div>
+      <div class="kidhead"><span class="avatar-lg">${avatar(u.avatar)}</span><div class="grow"><p class="eyebrow">حسابي</p><h2>${esc(u.nick)}</h2><p class="small muted">${gradeOf(S)?"الصف "+gradeLv(gradeOf(S)).short:"لسا ما اخترت صفك"}</p></div></div>
+      <div class="field"><span style="font-weight:800">صفي</span>${gradePick(gradeOf(S))}</div>
       <div class="field"><label for="nick2">اسم مستعار</label><input id="nick2" maxlength="16" value="${esc(u.nick)}"></div>
       <div class="field"><span style="font-weight:800">شخصيتي</span><div class="avs" role="radiogroup" aria-label="الشخصيات">${AVATARS.map(a=>`<button type="button" class="av" role="radio" aria-checked="${u.avatar===a.id}" data-av="${a.id}">${avatar(a.id)}<span>${a.name}</span></button>`).join("")}</div></div>
       <div><button class="btn btn-go btn-sm" id="saveme" type="button">احفظ</button></div>
@@ -773,9 +792,12 @@ function vMe(){
       <div class="row"><button class="btn btn-line btn-sm" id="lo" type="button">تسجيل خروج</button><button class="btn btn-line btn-sm" id="del" type="button">${Store.mode==="local"?"احذف حسابي من هاد الجهاز":"احذف حسابي نهائياً"}</button></div>
     </div>
   </section>`;
-  let av=u.avatar;
+  let av=u.avatar,gr=gradeOf(S);
+  bindGradePick(app,g=>{gr=g;});
   app.querySelectorAll(".av").forEach(b=>b.onclick=()=>{av=b.dataset.av;app.querySelectorAll(".av").forEach(x=>x.setAttribute("aria-checked",String(x===b)));beep("pop");});
-  $("#saveme").onclick=async()=>{const n=$("#nick2").value.trim();if(!n){toast("اكتب اسم مستعار");return;}const r=await Store.updateMe({nick:n.slice(0,16),avatar:av});if(!r.ok){toast("ما انحفظ: "+r.err);return;}renderNav();vMe();toast("انحفظ");};
+  $("#saveme").onclick=async()=>{const n=$("#nick2").value.trim();if(!n){toast("اكتب اسم مستعار");return;}const r=await Store.updateMe({nick:n.slice(0,16),avatar:av});if(!r.ok){toast("ما انحفظ: "+r.err);return;}
+    const moved=gr&&gr!==gradeOf(S);if(gr){S.grade=gr;save();}
+    renderNav();vMe();toast(moved&&S.diag?"انحفظ. غيّرت صفك، فالعب التشخيص من جديد عشان يتحدّث مسارك.":"انحفظ");};
   if(Store.refreshParents)Store.refreshParents().then(n=>{const el=$("#pcount");if(el)el.textContent=pcText(n);}).catch(()=>{});
   $("#cpy").onclick=()=>{const t=u.code;if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(()=>toast("انسخ الرمز"),()=>selectText($("#code")));else selectText($("#code"));};
   $("#lo").onclick=logout;
@@ -929,13 +951,43 @@ function tiltFor(q,val){
   }catch(e){return 8;}
 }
 
-/* ---------- diagnosis game (levels: start at grade 6, move up or down) ---------- */
+/* ---------- diagnosis game ----------
+   Starts with the skills of the student's grade. A right first answer marks the skill «mastered» and
+   every skill it builds on (all the way down) «assumed». A wrong first answer gets a second question;
+   wrong again = «gap», and the skills it builds on are queued and tested next (highest grade first),
+   so only the branches with a problem go down. At most DIAG_MAX questions; skills not reached stay
+   «untested» and are in the path. */
+const DIAG_MAX=20;
 let G=null;
 function setQ(id){G.q=qById[id];G.w=null;}
+const SK_ORDER=Object.fromEntries(SKILLS.map((s,i)=>[s.id,i]));
+function nextDiagSkill(){
+  const c=[...new Set(G.queue)].filter(id=>!G.res[id]&&!G.assumed.has(id));
+  c.sort((a,b)=>LV[skillById[b].lv].g-LV[skillById[a].lv].g||SK_ORDER[a]-SK_ORDER[b]);
+  return c[0]||null;
+}
 function startGame(){
-  G={lv:"L6",skills:SK_LV.L6,si:0,stage:"first",asked:[],res:{},lvPass:{},pending:[],trail:["L6"],inter:null};
-  setQ(DIAG_PICK[G.skills[0]][0]);drawGame();
+  const g=gradeOf(S),L=gradeLv(g);if(!L)return vPlay();
+  G={grade:g,queue:SK_LV[L.id].slice(),res:{},assumed:new Set(),stage:"first",asked:[],pending:[],trail:[],inter:null,lv:null,prev:null};
+  goNext(true);
   if(window.claude&&claude.use)claude.use("permissions").then(p=>p&&p.request(["sample"])).catch(()=>{});
+}
+function goNext(first){
+  const sid=G.asked.length>=DIAG_MAX?null:nextDiagSkill();
+  if(!sid)return endGame();
+  const lv=skillById[sid].lv,prev=G.lv;
+  G.stage="first";setQ(DIAG_PICK[sid][0]);
+  if(!G.trail.includes(lv))G.trail.push(lv);
+  G.lv=lv;
+  if(!first&&prev&&prev!==lv){G.prev=prev;G.inter=LV[lv].g>LV[prev].g?"up":"down";return drawInterlude();}
+  drawGame();
+}
+function setRes(sid,st){
+  G.res[sid]=st;
+  /* a right answer vouches for what it builds on, but not through a skill already found weak */
+  if(st==="mastered"){const seen=new Set(),stack=[...preOf(sid)];while(stack.length){const x=stack.pop();if(seen.has(x))continue;seen.add(x);
+    if(G.res[x]==="gap"||G.res[x]==="partial")continue;if(!G.res[x])G.assumed.add(x);stack.push(...preOf(x));}}
+  if(st==="gap")preOf(sid).forEach(x=>{if(!G.res[x]&&!G.assumed.has(x))G.queue.push(x);});
 }
 function followUp(sid){const asked=new Set(G.asked.map(a=>a.qid));return [DIAG_PICK[sid][1],...QS.filter(x=>x.skill===sid).sort((a,b)=>a.d-b.d).map(x=>x.id)].find(id=>id&&!asked.has(id))||null;}
 function record(val,skipped){
@@ -947,36 +999,25 @@ function record(val,skipped){
   if(!r.ok&&r.src==="ai"){if(sampleFn)G.pending.push(aiDiagnose(entry,q));else entry.src="none";}
   const sid=q.skill;
   if(G.stage==="first"){
-    if(r.ok){G.res[sid]="mastered";return nextSkill();}
-    /* a second question only from grade 4 up, so a long way down to grade 1 stays short */
-    const f=LV[G.lv].g>=4?followUp(sid):null;if(!f){G.res[sid]="gap";return nextSkill();}
+    if(r.ok){setRes(sid,"mastered");return goNext();}
+    /* «مش عارف» is a clear answer: no second question (that one is for a careless slip) */
+    if(skipped){setRes(sid,"gap");return goNext();}
+    const f=followUp(sid);if(!f){setRes(sid,"gap");return goNext();}
     G.stage="follow";setQ(f);return drawGame();
   }
-  G.res[sid]=r.ok?"partial":"gap";return nextSkill();
-}
-function nextSkill(){
-  G.si++;G.stage="first";
-  if(G.si<G.skills.length){setQ(DIAG_PICK[G.skills[G.si]][0]);return drawGame();}
-  const n=G.skills.filter(s=>G.res[s]==="mastered").length,pass=n>=LV[G.lv].need;G.lvPass[G.lv]=pass;
-  /* start at grade 6: pass -> grade 7 and stop; fail -> go down one grade at a time until a level is passed
-     or the lowest level is done. */
-  const li=LEVELS.findIndex(l=>l.id===G.lv);let nx=null;
-  if(G.lv==="L6")nx=pass?"L7":(LEVELS[li-1]||{}).id;
-  else if(LV[G.lv].g<6&&!pass)nx=(LEVELS[li-1]||{}).id;
-  nx=nx&&SK_LV[nx]&&SK_LV[nx].length?nx:null;
-  if(nx){G.prev=G.lv;G.lv=nx;G.skills=SK_LV[nx];G.si=0;G.trail.push(nx);setQ(DIAG_PICK[G.skills[0]][0]);G.inter=LV[nx].g>LV[G.prev].g?"up":"down";return drawInterlude();}
-  return endGame();
+  setRes(sid,r.ok?"partial":"gap");return goNext();
 }
 function islandsHTML(){
-  return `<div class="islands" aria-label="جزر المستويات">${LEVELS.map((l,i)=>{const now=G&&G.lv===l.id,done=G&&G.trail.includes(l.id)&&!now;
+  const g=G?G.grade:gradeOf(S);
+  return `<div class="islands" aria-label="جزر المستويات">${LEVELS.filter(l=>!g||l.g<=g).map((l,i)=>{const now=G&&G.lv===l.id,done=G&&G.trail.includes(l.id)&&!now;
     return `${i?'<span class="isle-link" aria-hidden="true"></span>':""}<div class="isle ${now?"now":""} ${done?"done":""}"><span class="dot">${l.g}</span><small>${l.short}</small></div>`;}).join("")}</div>`;
 }
 function drawInterlude(){
   const l=LV[G.lv];beep("win");
   app.innerHTML=`<section class="game">${islandsHTML()}
     <div class="card interlude">${LANTERN("big on")}
-      <h2>خلّصت جزيرة الصف ${LV[G.prev||"L6"].short}!</h2>
-      <p class="muted">${G.inter==="up"?`يلا نطلع على <b>جزيرة ${l.short}</b> ونشوف قديش بتعرف.`:`هلأ رح نزور <b>جزيرة ${l.short}</b> نتأكد من الأساسيات، عشان نبني عليها صح.`}</p>
+      <h2>خلّصنا من جزيرة الصف ${LV[G.prev].short}</h2>
+      <p class="muted">${G.inter==="up"?`يلا نطلع على <b>جزيرة ${l.short}</b>.`:`في مهارة بدها أساس من <b>جزيرة ${l.short}</b>. خلينا نتأكد منه عشان نبني عليه صح.`}</p>
       <button class="btn btn-go" id="goon" type="button">يلا</button>
     </div></section>`;
   $("#goon").onclick=()=>{G.inter=null;drawGame();};
@@ -987,7 +1028,7 @@ function drawGame(){
   app.innerHTML=`<section class="game">
     ${islandsHTML()}
     <div class="station"><span class="badge">${LV[G.lv].name}</span><span>${skNum(sk.id)} ${esc(sk.title)}</span><span class="qn">· لغز ${n}</span></div>
-    <div class="puzzle">
+    <div class="puzzle" data-q="${q.id}">
       <div class="ptype"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${TYPE_IC[q.type]}</svg>${TYPE_NAME[q.type]}</div>
       ${q.scale?scaleSVG(q.stem):""}
       <p class="stem">${mathify(q.stem)}</p>
@@ -1008,18 +1049,30 @@ function drawGame(){
 }
 function vPlay(){
   if(G)return drawGame();
+  const g=gradeOf(S);
+  if(!g){
+    app.innerHTML=`<section class="game"><div class="card" style="display:grid;gap:14px">
+      <p class="eyebrow">أهلاً ${esc(ME().nick)}</p>
+      <h2>قبل ما نبلّش: بأي صف إنت هلأ؟</h2>
+      <p class="muted">بنبلّش التشخيص بمهارات صفك، وبنرجع للمهارات اللي قبلها إذا احتجنا.</p>
+      ${gradePick(0)}
+    </div></section>`;
+    bindGradePick(app,n=>{S.grade=n;save();setTimeout(vPlay,180);});
+    return;
+  }
+  const L=gradeLv(g);
   app.innerHTML=`<section class="game"><div class="card" style="display:grid;gap:14px">
     <p class="eyebrow">أهلاً ${esc(ME().nick)}</p>
     <h2>رحلة الفوانيس</h2>
-    <p class="muted">رحلتك فيها ${arNum(LEVELS.length)} جزر، من جزيرة ${LEVELS[0].short} لجزيرة ${LEVELS[LEVELS.length-1].short}. بنبلّش من جزيرة السادس: إذا مشيت فيها منيح بنطلع لجزيرة السابع، وإذا صعبت عليك بننزل جزيرة جزيرة لتحت لحد ما نلاقي من وين تبلّش.</p>
-    <div class="islands" aria-hidden="true">${LEVELS.map((l,i)=>`${i?'<span class="isle-link"></span>':""}<div class="isle ${l.id==="L6"?"now":""}"><span class="dot">${l.g}</span><small>${l.short}</small></div>`).join("")}</div>
+    <p class="muted">بنبلّش بمهارات <b>الصف ${L.short}</b>. إذا جاوبت صح بنعرف إنك ماسك المهارات اللي بتعتمد عليها. وإذا غلطت، بنرجع جزيرة لورا نتأكد من الأساس اللي بتعتمد عليه، بس بالمهارات اللي فيها مشكلة.</p>
+    ${islandsHTML()}
     <div class="row" style="justify-content:center;gap:8px">${Object.keys(TYPE_NAME).map(t=>`<span class="chip calm"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${TYPE_IC[t]}</svg>${TYPE_NAME[t]}</span>`).join("")}</div>
     <ul class="muted small" style="margin:0;padding-inline-start:1.2em">
-      <li>عدد الألغاز بيتغيّر حسب أجوبتك: أقل شي 7 ألغاز، وكل ما نزلنا جزيرة بيزيدوا شوي.</li>
-      <li>ما في وقت ولا علامات. الهدف نعرف من وين نبلّش.</li>
+      <li>عدد الألغاز بيختلف حسب أجوبتك، وما بيزيد عن ${arNum(DIAG_MAX)} لغز تقريباً.</li>
+      <li>ما في وقت ولا علامات. الهدف نلاقي الفجوات ونبني مسارك عليها.</li>
       <li>نبراس (ذكاء اصطناعي) بيحلل أجوبتك الغلط عشان يعرف <b>ليش</b> صارت، وبيكتبلك تقرير بالآخر.</li>
     </ul>
-    <div class="row"><button class="btn btn-go" id="go" type="button">${S.diag?"العب من جديد":"يلا نلعب"}</button>${S.diag?`<a class="btn btn-line" href="#result">نتيجتي السابقة</a>`:""}</div>
+    <div class="row"><button class="btn btn-go" id="go" type="button">${S.diag?"العب من جديد":"يلا نلعب"}</button>${S.diag?`<a class="btn btn-line" href="#result">نتيجتي السابقة</a>`:""}<a class="btn btn-line btn-sm" href="#me">مش صفك؟ غيّره</a></div>
   </div></section>`;
   $("#go").onclick=startGame;
 }
@@ -1030,10 +1083,10 @@ async function endGame(){
     await Promise.allSettled(g.pending);
   }
   const skills={};
-  for(const s of SKILLS)skills[s.id]=g.res[s.id]||(assumedBy(g.lvPass,s.lv)?"assumed":"untested");
+  for(const s of pathOf(S))skills[s.id]=g.res[s.id]||(g.assumed.has(s.id)?"assumed":"untested");
   const mis={};g.asked.forEach(a=>{if(!a.ok&&a.mis)mis[a.mis]=(mis[a.mis]||0)+1;});
-  const start=SKILLS.find(s=>!["mastered","assumed"].includes(skills[s.id]));
-  S.diag={at:new Date().toISOString(),skills,lvPass:g.lvPass,trail:g.trail,start:start?start.id:null,mis,count:g.asked.length,
+  const start=pathOf(S).find(s=>!["mastered","assumed"].includes(skills[s.id]));
+  S.diag={v:2,grade:g.grade,at:new Date().toISOString(),skills,lvPass:{},trail:g.trail,start:start?start.id:null,mis,count:g.asked.length,
     answers:g.asked.map(a=>({qid:a.qid,a:a.a,ok:a.ok,mis:a.mis,src:a.src,why:a.why||""})),report:""};
   logEvent("diag");
   notifyParents("diag");
@@ -1076,7 +1129,8 @@ const SRC={math:"تحقق حسابي",match:"مطابقة مع مكتبة الأ
 const REP={busy:false,text:"",ctl:null,fail:null};
 function reportPrompt(d,start,nick){
   const ans=(d.answers||[]).map(a=>{const q=qById[a.qid];return `- [${q?skillById[q.skill].title:""}] ${q?arProse(q.stem):a.qid} | جواب الطالب: ${arProse(a.a)} | ${a.ok?"صحيح":"خطأ"}${a.mis?` | الخطأ المفاهيمي: ${misById[a.mis].title}`:""}${a.why?` | ملاحظة: ${a.why}`:""}`;}).join("\n");
-  return `أنت «نبراس»، معلم رياضيات فلسطيني دافئ. اكتب لطالب في الصف السابع (اسمه المستعار: ${nick}) تقريراً قصيراً عن نتيجة لعبة التشخيص التي أنهاها الآن. اللعبة تختبر مهارات من الصف الأول حتى السابع.
+  const gl=gradeLv(d.grade)||LV.L7;
+  return `أنت «نبراس»، معلم رياضيات فلسطيني دافئ. اكتب لطالب في الصف ${gl.short} (اسمه المستعار: ${nick}) تقريراً قصيراً عن نتيجة لعبة التشخيص التي أنهاها الآن. اللعبة تبدأ بمهارات صفه، وعند الخطأ ترجع إلى المهارات السابقة التي تعتمد عليها المهارة لتحديد الفجوات.
 
 القواعد:
 - لهجة فلسطينية بسيطة ومشجّعة، من 60 إلى 100 كلمة، فقرتان قصيرتان، بدون عناوين أو قوائم.
@@ -1085,7 +1139,7 @@ function reportPrompt(d,start,nick){
 - اختم بجملة أننا سنبدأ معاً من مهارة «${start?start.title:"التحدي مع نبراس"}».
 - لا تذكر أي معلومة غير موجودة في البيانات. ${AR_MATH?"اكتب أي تعبير رياضي كنص عادي بترميز الكتاب المدرسي كما في البيانات: الأرقام ٠١٢٣٤٥٦٧٨٩ والمتغيرات بحروف عربية، مثل ٣س + ٦، بدون LaTeX وبدون علامة الدولار.":"اكتب أي تعبير رياضي بين علامتي $ مثل $3x + 6$."}
 
-حالة المهارات: ${SKILLS.map(s=>`${s.title} (${LV[s.lv].short}) = ${STATUS[stOf(d,s.id)][0]}`).join("؛ ")}
+حالة المهارات: ${SKILLS.filter(s=>d.skills[s.id]).map(s=>`${s.title} (${LV[s.lv].short}) = ${STATUS[stOf(d,s.id)][0]}`).join("؛ ")}
 إجابات الطالب:
 ${ans}`;
 }
@@ -1100,12 +1154,12 @@ function genReport(d,start){
 const LOCK='<svg class="lk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
 const BULB='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>';
 function levelTable(d){
-  return `<div class="lvgrid">${LEVELS.map(l=>`<div class="lvbox"><h4>${l.name}</h4>${SK_LV[l.id].map(id=>{const st=stOf(d,id),now=d.start===id;
+  return `<div class="lvgrid">${LEVELS.filter(l=>!d.grade||l.g<=d.grade).map(l=>`<div class="lvbox"><h4>${l.name}</h4>${SK_LV[l.id].map(id=>{const st=stOf(d,id),now=d.start===id;
     return `<div class="sk"><span>${esc(skillById[id].title)}</span><span class="chip ${now?"lit":STATUS[st][1]}">${now?"البداية من هون":STATUS[st][0]}</span></div>`;}).join("")}</div>`).join("")}</div>`;
 }
 function vResult(){
   if(!S.diag)return vPlay();
-  const d=S.diag,start=d.start?skillById[d.start]:null,mis=Object.keys(d.mis||{}),pc=Store.parentCount();
+  const d=S.diag,gaps=pathOf(S).filter(s=>["gap","partial"].includes(stOf(d,s.id))),start=d.start?skillById[d.start]:null,mis=Object.keys(d.mis||{}),pc=Store.parentCount();
   let rep="";
   if(d.report)rep=md(d.report);
   else if(REP.busy)rep=REP.text?md(REP.text):'<span class="thinking" aria-label="نبراس بيكتب"><i></i><i></i><i></i></span> <span class="small muted">نبراس بيكتب تقريرك…</span>';
@@ -1114,9 +1168,9 @@ function vResult(){
   const showRep=!!d.answers&&(d.report||REP.busy||sampleFn!==null);
   app.innerHTML=`<section class="view">
     <div class="card" style="display:grid;gap:16px">
-      <p class="eyebrow">ضوّيت ${d.count} فوانيس. يعطيك العافية!</p>
+      <p class="eyebrow">حلّيت ${arNum(d.count)} ${d.count>2&&d.count<11?"ألغاز":"لغز"}. يعطيك العافية!</p>
       <h2>${start?`نقطة انطلاقك: ${esc(start.title)}`:"ضوّيت كل الجزر!"}</h2>
-      ${start?`<p class="muted">مستواك الحالي: <b style="color:var(--logo)">${LV[start.lv].name}</b>. من هون رح نمشي سوا خطوة خطوة.</p>`:""}
+      ${start?`<p class="muted">${gaps.length?`لقينا ${arNum(gaps.length)} ${gaps.length>2&&gaps.length<11?"مهارات":"مهارة"} بدها شغل، أقدمها من <b style="color:var(--logo)">${LV[start.lv].name}</b>.`:`أول محطة بمسارك من <b style="color:var(--logo)">${LV[start.lv].name}</b>.`} من هون رح نمشي سوا خطوة خطوة.</p>`:""}
       ${showRep?`<div class="report"><span class="aibadge">✦ تقرير نبراس · ذكاء اصطناعي</span><div id="rep" class="small" style="display:grid;gap:6px">${rep}</div></div>`:""}
       ${levelTable(d)}
       ${mis.length?`<div style="display:grid;gap:8px"><h3>أفكار رح نصلّحها سوا</h3><div class="ideas">${mis.map(id=>`<div class="idea">${BULB}<div><b>${esc(misById[id].title)}</b><p class="small muted">${mathify(HINT[id])}</p></div></div>`).join("")}</div></div>`:""}
@@ -1129,7 +1183,7 @@ function vResult(){
           <p class="tiny">${a.mis?`الخطأ المفاهيمي: <b>${esc(misById[a.mis].title)}</b> (${a.mis}) · `:""}الطريقة: ${SRC[a.src]||a.src}${a.why?` · ${mathify(a.why)}`:""}</p>
         </div>`;}).join("")}</div></details>`:""}
     </div>
-    <p class="draft">النتيجة تقدير أولي من ${d.count} ألغاز. الصح والغلط بيتحدد بالحساب، والذكاء الاصطناعي بيقترح سبب الغلط وممكن يخطئ. المهارات «الثابتة» ما انختبرت لأنك نجحت بمستوى أعلى منها.</p>
+    <p class="draft">النتيجة تقدير أولي من ${d.count} ألغاز. الصح والغلط بيتحدد بالحساب، والذكاء الاصطناعي بيقترح سبب الغلط وممكن يخطئ. المهارات «الثابتة» ما انختبرت لأنك جاوبت صح على مهارة بتعتمد عليها.</p>
   </section>`;
   const rr=$("#retryrep");if(rr)rr.onclick=()=>{REP.fail=null;vResult();};
   if(!d.report&&!REP.busy&&!REP.fail&&d.answers&&sampleFn)genReport(d,start);
@@ -1144,14 +1198,14 @@ function vPath(){
   app.innerHTML=`<section class="view">
     <div class="row between" style="align-items:flex-end">
       <div><p class="eyebrow">مسار ${esc(ME().nick)}</p><h2>${cur?`المحطة الجاية: ${esc(cur.title)}`:"ضوّيت كل الفوانيس!"}</h2></div>
-      <span class="chip lit">${litN} من ${SKILLS.length} فوانيس</span>
+      <span class="chip lit">${litN} من ${pathOf(S).length} فوانيس</span>
     </div>
-    ${LEVELS.map(l=>{const k=litCount(S,l.id),n=SK_LV[l.id].length;return `<div class="lvsec">
-      <div class="lvhead"><h3><span class="lvnum">${l.g}</span>${l.name}</h3><span class="small muted">${k} من ${n}</span></div>
+    ${LEVELS.map(l=>{const k=litCount(S,l.id),n=SK_LV[l.id].length,later=gradeOf(S)&&l.g>gradeOf(S);return `<div class="lvsec ${later?"later":""}">
+      <div class="lvhead"><h3><span class="lvnum">${l.g}</span>${l.name}</h3><span class="small muted">${later?"مستوى جاي":`${k} من ${n}`}</span></div>
       <div class="pbar" aria-hidden="true"><i style="width:${Math.round(k/n*100)}%"></i></div>
       <div class="trail">${SK_LV[l.id].map(id=>{const s=skillById[id],lit=isLit(id),now=cur&&cur.id===id,st=statusOf(S,id);idx++;
-        const chip=lit?(st==="assumed"&&!S.lit[id]?["ثابتة ✦","good"]:["متقَنة ✦","lit"]):now?["أنت هنا","lit"]:["مقفلة","plain"];
         const open=canOpen(id),tag=open?"a":"div";
+        const chip=lit?(st==="assumed"&&!S.lit[id]?["ثابتة ✦","good"]:["متقَنة ✦","lit"]):now?["أنت هنا","lit"]:!inPathP(S,id)?["مستوى جاي","plain"]:open?["مفتوحة","calm"]:["مقفلة","plain"];
         return `<${tag} class="stop ${lit?"lit":""} ${now?"now":""} ${open?"":"locked"}"${open?` href="#skill-${id}"`:` aria-disabled="true"`}><span class="orb">${LANTERN(lit?"on":"off")}${open?"":LOCK}</span>
           <span class="info"><span class="row between" style="gap:8px"><b><span class="sknum">${skNum(id)}</span>${esc(s.title)}</b><span class="chip ${chip[1]}">${chip[0]}</span></span><span class="small muted">${esc(s.summary)}</span>
           <span class="tiny">${preOf(id).length?"بتعتمد على: "+preOf(id).map(x=>skNum(x)+" "+esc(skillById[x].title)).join("، "):"مهارة أساس، ما بتعتمد على مهارة قبلها"}</span>
@@ -1434,11 +1488,11 @@ function vParent(){
   });
 }
 function kidCard(k){
-  const p=k.progress,d=p.diag,cur=currentSkillP(p);
+  const p=k.progress,d=diagOf(p),cur=currentSkillP(p);
   const evText=e=>e.kind==="diag"?"خلّص التشخيص الأولي":e.kind==="skill"&&skillById[e.skill]?`أتقن «${skillById[e.skill].title}»`:e.kind==="level"&&LV[e.level]?`أنهى ${LV[e.level].name}`:e.kind==="quiz"&&skillById[e.skill]?`كويز «${skillById[e.skill].title}»: ${arNum(e.score)} من ${arNum(e.n)}`:"";
   const evs=(p.events||[]).filter(e=>evText(e)).slice().reverse().slice(0,8);
   return `<div class="card kid">
-    <div class="kidhead"><span class="avatar-md">${avatar(k.avatar)}</span><div class="grow"><h3>${esc(k.nick||"")}</h3><p class="small muted">${d?(cur?`المحطة الحالية: ${esc(cur.title)} · ${LV[cur.lv].name}`:"أنهى كل المحطات"):"لسا ما لعب لعبة التشخيص"}</p></div><span class="chip lit">${litCount(p)} من ${SKILLS.length}</span></div>
+    <div class="kidhead"><span class="avatar-md">${avatar(k.avatar)}</span><div class="grow"><h3>${esc(k.nick||"")}</h3><p class="small muted">${gradeOf(p)?"الصف "+gradeLv(gradeOf(p)).short+" · ":""}${d?(cur?`المحطة الحالية: ${esc(cur.title)} · ${LV[cur.lv].name}`:"أنهى كل المحطات"):"لسا ما لعب لعبة التشخيص"}</p></div><span class="chip lit">${litCount(p)} من ${SKILLS.length}</span></div>
     ${d?`<div style="display:grid;gap:10px">
       <div class="row between"><h4 style="margin:0;color:var(--logo)">التشخيص الأولي · ${fmtDate(d.at)}</h4><button class="btn btn-line btn-sm" type="button" data-report="${esc(k.id)}">انسخ التقرير</button></div>
       <p class="small">${d.start&&skillById[d.start]?`بلّش من <b>${esc(skillById[d.start].title)}</b> (${LV[skillById[d.start].lv].name}).`:"متمكّن من كل المهارات اللي انختبرت."} جاوب على ${d.count} ألغاز.</p>
@@ -1448,7 +1502,7 @@ function kidCard(k){
     </div>`:""}
     <div style="display:grid;gap:10px">
       <h4 style="margin:0;color:var(--logo)">التقدّم بالمراحل</h4>
-      ${LEVELS.map(l=>{const n=SK_LV[l.id].length,c=litCount(p,l.id);return `<div style="display:grid;gap:4px"><div class="row between small"><span>${l.name}</span><span>${c} من ${n}</span></div><div class="pbar" aria-hidden="true"><i style="width:${Math.round(c/n*100)}%"></i></div></div>`;}).join("")}
+      ${LEVELS.filter(l=>!gradeOf(p)||l.g<=gradeOf(p)).map(l=>{const n=SK_LV[l.id].length,c=litCount(p,l.id);return `<div style="display:grid;gap:4px"><div class="row between small"><span>${l.name}</span><span>${c} من ${n}</span></div><div class="pbar" aria-hidden="true"><i style="width:${Math.round(c/n*100)}%"></i></div></div>`;}).join("")}
       ${SKILLS.some(sk=>quizOf(p,sk.id))?`<div style="display:grid;gap:6px"><b class="small">درجات كويزات المهارات</b>${SKILLS.filter(sk=>quizOf(p,sk.id)).map(sk=>{const r=quizOf(p,sk.id);return `<div class="row between small skgrade-row"><span><span class="sknum">${skNum(sk.id)}</span>${esc(sk.title)}</span><span class="skgrade">${starsHTML(r.best)}${gradeChip(r.best)}</span></div>`;}).join("")}</div>`:""}
       ${evs.length?`<ul class="timeline">${evs.map(e=>`<li><span class="when">${fmtTime(e.at)}</span><span>${esc(evText(e))}</span></li>`).join("")}</ul>`:""}
     </div>
@@ -1502,9 +1556,9 @@ NibrasAI.get().then(s=>{sampleFn=s||null;if(s&&s.limits)s.limits().then(l=>{imgO
 function context(){
   const g=isGuest();
   const d=S.diag,L=g?["# سياق الجلسة","- هذه جلسة تجريبية: الزائر معلم يختبر نبراس، وقد يكتب كأنه طالب. تصرّف تماماً كما تتصرف مع طالب في الصف السابع، بنفس طريقة التعليم والحدود.","- لا تقترح لعبة التشخيص ولا المسار، فالزائر ليس له حساب طالب.","- الصف المفترض: السابع"]
-    :["# سياق الطالب",`- الاسم المستعار: ${ME().nick} (لا تطلب اسمه الحقيقي)`,"- الصف: السابع"];
+    :["# سياق الطالب",`- الاسم المستعار: ${ME().nick} (لا تطلب اسمه الحقيقي)`,`- الصف: ${gradeOf(S)?gradeLv(gradeOf(S)).short:"غير محدد"}`];
   if(g){/* no diagnostic data for a guest */}
-  else if(d){L.push("- نتيجة التشخيص: "+SKILLS.map(s=>`${s.title} (${LV[s.lv].short}) = ${STATUS[stOf(d,s.id)][0]}`).join("؛ "));
+  else if(d){L.push("- نتيجة التشخيص: "+pathOf(S).map(s=>`${s.title} (${LV[s.lv].short}) = ${STATUS[stOf(d,s.id)][0]}`).join("؛ "));
     const c=currentSkill();L.push(`- المحطة الحالية في مساره: ${c?c.title+" ("+LV[c.lv].name+")":"أتقن كل المهارات"}`);}
   else L.push("- لم يلعب التشخيص بعد. إذا طلب مساعدة عامة اقترح عليه لعبة التشخيص بلطف.");
   const det=Object.entries(S.detected).sort((a,b)=>b[1]-a[1]).map(([id,n])=>`${id} (${n})`);
