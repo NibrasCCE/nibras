@@ -1120,10 +1120,29 @@ function vPath(){
 
 /* ---------- skill lesson + practice ---------- */
 let P=null;
+/* the lesson in three levels: 0 = the book's explanation, 1 = simpler (one short step at a time),
+   2 = simplest (a story with one idea). Only skills that have `simple` in data.js get the switch;
+   the student's choice is kept per skill on this device. */
+const XL_KEY="nibras.xlevel",XL_NAMES=["الشرح","أبسط","أبسط كمان"];
+let XL={};try{XL=JSON.parse(localStorage.getItem(XL_KEY)||"{}")||{};}catch(e){XL={};}
+const xlOf=sid=>skillById[sid]&&skillById[sid].simple&&skillById[sid].simplest?Math.max(0,Math.min(2,XL[sid]|0)):-1;
+function setXl(sid,v){XL[sid]=v;try{localStorage.setItem(XL_KEY,JSON.stringify(XL));}catch(e){}}
+function xlBody(sk,xl){
+  if(xl===1)return `<div class="xsteps">${sk.simple.map((x,i)=>`<div class="xstep"${i?" hidden":""}><p>${mathify(x.t)}</p>${x.f?figHTML(x.f,x.cap):""}</div>`).join("")}
+      <div class="fignav"><button type="button" class="btn btn-line btn-sm" id="xprev">→ السابق</button><span id="xpos" class="small" aria-live="polite"></span><button type="button" class="btn btn-go btn-sm" id="xnext">التالي ←</button></div></div>
+    <div class="xmore" id="xmore1" hidden><span>لسا صعب؟</span><button type="button" class="btn btn-line btn-sm" data-xl="2">جرّب «أبسط كمان»</button></div>
+    <p class="tiny">شرح مبسّط · مسودة بانتظار مراجعة معلم</p>`;
+  const z=sk.simplest;
+  return `<div class="xstory">${z.t.map(t=>`<p>${mathify(t)}</p>`).join("")}${z.f?figHTML(z.f,z.cap):""}
+      ${z.tryQ?`<div class="xtry"><p>${mathify(z.tryQ)}</p><details><summary>شوف الجواب</summary><p>${mathify(z.tryA)}</p></details></div>`:""}</div>
+    <div class="xmore"><span>لسا مش واضح؟</span><a class="btn btn-go btn-sm" href="#ask" id="xask">اسأل نبراس</a></div>
+    <p class="tiny">شرح مبسّط · مسودة بانتظار مراجعة معلم</p>`;
+}
 function vSkill(sid){
   const sk=skillById[sid];
   if(!P||P.sid!==sid){const qs=QS.filter(q=>q.skill===sid).sort((a,b)=>a.d-b.d);P={sid,qs,i:0,first:true,state:"ask",fb:null,tried:[],val:null,order:null,items:null,tilt:0};}
   const streak=S.streak[sid]||0,lit=isLit(sid),q=P.qs[P.i],finished=P.i>=P.qs.length;
+  const xl=xlOf(sid);
   let fb="";
   if(P.state==="right")fb=`<div class="fb good" role="status"><b>صح! ${P.first?"شغلك مرتّب.":"حلو إنك ما استسلمت."}</b>${P.first?"":`<p class="small">الجواب الأول ما بيعدّ بالسلسلة، بس المحاولة هي اللي بتعلّم.</p>`}</div>`;
   if(P.state==="hint"){const r=P.fb||{};const txt=r.mis&&HINT[r.mis]?HINT[r.mis]:r.src==="form"?r.why:sk.summary;
@@ -1134,11 +1153,13 @@ function vSkill(sid){
     <div class="card explain">
       <p class="eyebrow">${LV[sk.lv].name}</p>
       <h2>${esc(sk.title)}</h2>
-      <p>${mathify(sk.explanation)}</p>
+      ${xl>=0?`<div class="xltabs" role="group" aria-label="مستوى الشرح">${XL_NAMES.map((n,i)=>`<button type="button" class="xlt" data-xl="${i}" aria-pressed="${i===xl}">${n}</button>`).join("")}</div>`:""}
+      ${xl>0?xlBody(sk,xl):`<p>${mathify(sk.explanation)}</p>
       ${sk.learn?`<div class="learn"><b>${BULB}أتعلّم</b><ul>${sk.learn.map(t=>`<li>${mathify(t)}</li>`).join("")}</ul></div>`:""}
       ${sk.figs?`<div class="figbox"><b>أتأمّل الرسومات</b><div class="figs swipe" id="lfigs" tabindex="0" aria-label="رسومات الدرس">${sk.figs.map(x=>figHTML(x.f,x.cap)).join("")}</div>
         <div class="fignav"><button type="button" class="btn btn-line btn-sm" id="fprev">→ السابق</button><span id="fpos" class="small" aria-live="polite"></span><button type="button" class="btn btn-line btn-sm" id="fnext">التالي ←</button></div></div>`:""}
       <div class="example"><b>مثال من الحياة</b><p>${mathify(sk.example)}</p></div>
+      ${xl===0?`<div class="xmore"><span>صعب شوي؟</span><button type="button" class="btn btn-line btn-sm" data-xl="1">جرّب «أبسط»</button></div>`:""}`}
       <p class="tiny">${esc(sk.src)}</p>
     </div>
     ${finished?`<div class="card done">${LANTERN("big on")}<h2>${lit?"ضوّيت فانوس هالمحطة!":"خلّصت تمارين المحطة"}</h2><p class="muted">${lit?"يلا على المحطة الجاية.":`بدك تعيد التمارين؟ كل ${MASTER_STREAK} إجابات صح من أول محاولة ورا بعض بتضوّي الفانوس.`}</p>
@@ -1157,6 +1178,14 @@ function vSkill(sid){
       </div>
     </div>`}
   </section>`;
+  /* explanation levels: the switch, the simpler level's steps (place kept between checks), and «اسأل نبراس» */
+  app.querySelectorAll("[data-xl]").forEach(b=>b.onclick=()=>{const tab=b.classList.contains("xlt");setXl(sid,+b.dataset.xl);vSkill(sid);
+    const c=app.querySelector(".card.explain");if(c&&!tab)c.scrollIntoView({block:"start",behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});});
+  const xs=app.querySelector(".xsteps");
+  if(xs){const it=[...xs.querySelectorAll(".xstep")],n=it.length;P.xs=Math.max(0,Math.min(P.xs||0,n-1));
+    const paint=()=>{it.forEach((e,i)=>{e.hidden=i!==P.xs;});$("#xpos").textContent=arNum(`${P.xs+1} / ${n}`);$("#xprev").disabled=P.xs<=0;$("#xnext").disabled=P.xs>=n-1;$("#xmore1").hidden=P.xs<n-1;};
+    paint();$("#xprev").onclick=()=>{P.xs--;paint();};$("#xnext").onclick=()=>{P.xs++;paint();};}
+  const xa=$("#xask");if(xa)xa.onclick=()=>{CHAT.prefill=`ما فهمت درس «${sk.title}». ممكن تشرحلي بطريقة أبسط، بمثال من حياتي؟`;};
   /* the lesson's figures: one at a time, swipe or use the two buttons; the place is kept between checks */
   const lf=$("#lfigs");
   if(lf){const it=[...lf.children],n=it.length,st=P;

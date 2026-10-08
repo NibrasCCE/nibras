@@ -812,3 +812,22 @@ body.wide .top{background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-
 .nb-plan li::before{content:"";flex:none;width:9px;height:9px;margin-top:.6em;border-radius:50%;background:var(--glow);box-shadow:0 0 0 4px var(--glow-soft)}
 .nb-plan .btn{justify-self:stretch;margin-top:auto}
 .nb-plans-note{text-align:center;font-size:.86rem;color:var(--ink-3);max-width:46em;margin-inline:auto}
+
+/* explanation levels (الشرح / أبسط / أبسط كمان) */
+.xltabs{display:flex;gap:4px;padding:4px;background:var(--surface-2);border-radius:999px;width:fit-content;max-width:100%}
+.xlt{border:0;background:none;color:var(--ink-2);font:inherit;font-weight:700;font-size:.92rem;padding:7px 14px;border-radius:999px;cursor:pointer;white-space:nowrap}
+.xlt[aria-pressed="true"]{background:var(--brand);color:var(--on-brand)}
+.xlt:focus-visible{outline:3px solid var(--lamp);outline-offset:2px}
+.xsteps{border:1px dashed var(--line);border-radius:var(--r-sm);padding:12px 14px;background:var(--surface);display:grid;gap:10px}
+.xstep{display:grid;gap:8px}
+.xstep[hidden]{display:none}
+.xstep>p{margin:0;font-size:1.08rem;line-height:1.95}
+.xstory{background:var(--glow-soft);border-radius:var(--r-sm);padding:14px 16px;display:grid;gap:8px}
+.xstory>p{margin:0;font-size:1.08rem;line-height:1.95}
+.xstory .fig{background:var(--surface);border-radius:12px;padding:8px}
+.xtry{border-top:1px dashed var(--line);padding-top:10px;display:grid;gap:6px}
+.xtry p{margin:0;font-weight:700}
+.xtry summary{cursor:pointer;color:var(--brand-text);font-weight:800;width:fit-content}
+.xtry details p{font-weight:400;margin-top:6px}
+.xmore{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.xmore>span{color:var(--ink-2)}
