@@ -448,8 +448,9 @@ function composeMsg0(stu,kind,extra,ch){
   }else if(kind==="skill"){
     const s=skillById[extra.skill];
     subject=`نبراس · ${nick} أتقن مهارة جديدة`;
-    if(ch==="sms")return{subject,body:`نبراس: مبروك! ${nick} أتقن «${s.title}». صار ضاوي ${litCount(p)} من ${pathOf(p).length} فوانيس.`};
-    lines.push("مبروك!",`${nick} أتقن مهارة «${s.title}» (${LV[s.lv].name}) بعد ${MASTER_STREAK} إجابات صحيحة متتالية من أول محاولة.`,`صار ضاوي ${litCount(p)} من ${pathOf(p).length} فوانيس بمساره.`);
+    const qz=quizOf(p,s.id),res=qz?` (${qz.bestScore!=null?qz.bestScore:qz.score} من ${qz.n} صح، ${"★".repeat(qz.best)}${"☆".repeat(3-qz.best)})`:"";
+    if(ch==="sms")return{subject,body:`نبراس: مبروك! ${nick} نجح بكويز «${s.title}»${res}. صار ضاوي ${litCount(p)} من ${pathOf(p).length} فوانيس.`};
+    lines.push("مبروك!",`${nick} أتقن مهارة «${s.title}» (${LV[s.lv].name}) بعد ما نجح بكويز المهارة${res}.`,`صار ضاوي ${litCount(p)} من ${pathOf(p).length} فوانيس بمساره.`);
   }else if(kind==="level"){
     const l=LV[extra.level],nx=currentSkillP(p);
     subject=`نبراس · ${nick} أنهى ${l.name}`;
@@ -597,7 +598,7 @@ function vHelp(){
       const j=await r.json().catch(()=>({}));
       if(!r.ok||String(j.success)==="false")throw new Error(j.message||("HTTP "+r.status));
       HELP.sending=false;HELP.sent=true;vHelp();beep("win");}
-    catch(err){console.warn("[help]",err);HELP.sending=false;HELP.err="ما قدرنا نبعت الرسالة هسا. تأكد من الإنترنت وجرّب كمان مرة.";back();}
+    catch(err){console.warn("[help]",err);HELP.sending=false;HELP.err=/activat/i.test(String(err&&err.message))?"الفورم لسا بحاجة تفعيل من فريق نبراس (مرة وحدة بس). جرّب كمان شوي.":"ما قدرنا نبعت الرسالة هسا. تأكد من الإنترنت وجرّب كمان مرة.";back();}
   };
 }
 
@@ -660,7 +661,7 @@ function vLanding(){
         <span class="line" aria-hidden="true"></span>
         <article class="nb-step"><span class="num">01</span><span class="ic"><svg class="step-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" class="f"/><path d="M15.5 15.5L21 21"/><path d="M8 10.5h5M10.5 8v5"/></svg></span><h3>اكتشف</h3><b>نبراس يفهم مستواك</b><p>لعبة قصيرة، والذكاء الاصطناعي يقرأ إجاباتك ويكتشف المهارات التي تحتاج إلى تقوية.</p></article>
         <article class="nb-step"><span class="num">02</span><span class="ic"><svg class="step-ic" viewBox="0 0 24 24" aria-hidden="true"><path class="f" d="M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/><path d="M9.5 19h5M10.5 21.5h3"/></svg></span><h3>افهم</h3><b>تعلّم من النقطة التي توقّفت عندها</b><p>شرح مبسّط ومثال من الحياة اليومية، مناسب لمستواك.</p></article>
-        <article class="nb-step"><span class="num">03</span><span class="ic"><svg class="step-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9.5" r="6.5" class="f"/><path d="M12 6.4l1 2 2.2.3-1.6 1.5.4 2.2-2-1-2 1 .4-2.2-1.6-1.5 2.2-.3z"/><path d="M8.5 15l-1.5 6.5 5-2.5 5 2.5-1.5-6.5"/></svg></span><h3>أتقن</h3><b>تدرّب حتى تثبت الفكرة</b><p>تمارين تفاعلية، والفانوس يضيء بعد ثلاث إجابات صحيحة متتالية.</p></article>      </div>
+        <article class="nb-step"><span class="num">03</span><span class="ic"><svg class="step-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9.5" r="6.5" class="f"/><path d="M12 6.4l1 2 2.2.3-1.6 1.5.4 2.2-2-1-2 1 .4-2.2-1.6-1.5 2.2-.3z"/><path d="M8.5 15l-1.5 6.5 5-2.5 5 2.5-1.5-6.5"/></svg></span><h3>أتقن</h3><b>تدرّب حتى تثبت الفكرة</b><p>تمارين تفاعلية، وبالآخر كويز للمهارة: إذا نجحت فيه بيضيء الفانوس.</p></article>      </div>
     </section>
 
     <section class="nb-sec" aria-labelledby="nb-games-h">
@@ -1251,12 +1252,6 @@ function vResult(){
       ${mis.length?`<div style="display:grid;gap:8px"><h3>أفكار رح نصلّحها سوا</h3><div class="ideas">${mis.map(id=>`<div class="idea">${BULB}<div><b>${esc(misById[id].title)}</b><p class="small muted">${mathify(HINT[id])}</p></div></div>`).join("")}</div></div>`:""}
       <div class="notice">${IC_PAR}<span>${pc?`تقرير التشخيص صار ظاهر لولي أمرك بصفحة الأهالي.`:`اربط حساب أهلك من صفحة <a href="#me">حسابي</a> عشان يوصلهم التقرير.`}</span></div>
       <div class="row"><a class="btn btn-go" href="#${start?"skill-"+start.id:"path"}">${start?"ابدأ أول محطة":"شوف مساري"}</a><a class="btn btn-line" href="#path">مساري</a></div>
-      ${d.answers&&d.answers.length?`<details class="detail"><summary>تفاصيل التشخيص (للمعلم)</summary>
-        <div class="dlist">${d.answers.map((a,i)=>{const q=qById[a.qid];return `<div class="drow">
-          <p class="small"><b>${i+1}.</b> <span class="chip plain">${q?LV[skillById[q.skill].lv].short:""}</span> ${q?mathify(q.stem):""}</p>
-          <p class="small">جواب الطالب: ${mx(a.a)} · <span class="chip ${a.ok?"good":"plain"}">${a.ok?"صحيح":"غير صحيح"}</span></p>
-          <p class="tiny">${a.mis?`الخطأ المفاهيمي: <b>${esc(misById[a.mis].title)}</b> (${a.mis}) · `:""}الطريقة: ${SRC[a.src]||a.src}${a.why?` · ${mathify(a.why)}`:""}</p>
-        </div>`;}).join("")}</div></details>`:""}
     </div>
     <p class="draft">النتيجة تقدير أولي من ${arNum(d.count)} ${d.count>2&&d.count<11?"ألغاز":"لغز"}. الصح والغلط بيتحدد بالحساب، والذكاء الاصطناعي بيقترح سبب الغلط وممكن يخطئ. المهارات «المفهومة من جوابك» ما انسألت عنها، لأنك جاوبت صح على مهارة مبنية عليها.</p>
   </section>`;
@@ -1365,7 +1360,7 @@ function vSkill(sid){
     const hf=Array.isArray(q.hfig)?q.hfig:q.hfig?(q.hfig[r.mis]||q.hfig._):null;
     fb=`<div class="fb hint" role="status"><b>${r.mis?"فكرة شائعة، خلينا نشوفها":"قرّبت! جرّب مرة ثانية"}</b><p>${mathify(txt)}</p>${r.src==="form"?"":figsHTML(hf,q.hcap)}</div>`;}
   app.innerHTML=`<section class="view">
-    <div class="row between"><a class="btn btn-line btn-sm" href="#path">← مساري</a><span class="chip ${lit?"lit":"calm"}">${lit?"فانوس مضاء ✦":`سلسلة ${streak} من ${MASTER_STREAK}`}</span></div>
+    <div class="row between"><a class="btn btn-line btn-sm" href="#path">← مساري</a><span class="chip ${lit?"lit":"calm"}">${lit?"فانوس مضاء ✦":"الفانوس بيضوي بالكويز"}</span></div>
     <div class="card explain">
       <p class="eyebrow">${LV[sk.lv].name} · مهارة ${skNum(sid)}</p>
       <h2><span class="sknum">${skNum(sid)}</span>${esc(sk.title)}</h2>
@@ -1382,7 +1377,7 @@ function vSkill(sid){
       </div>
       <p class="tiny">${esc(sk.src)}</p>
     </div>
-    ${finished?`<div class="card done">${LANTERN("big on")}<h2>${lit?"ضوّيت فانوس هالمحطة!":"خلّصت تمارين المحطة"}</h2><p class="muted">${lit?"يلا على المحطة الجاية.":`بدك تعيد التمارين؟ كل ${MASTER_STREAK} إجابات صح من أول محاولة ورا بعض بتضوّي الفانوس.`}</p>
+    ${finished?`<div class="card done">${LANTERN("big on")}<h2>${lit?"ضوّيت فانوس هالمحطة!":"خلّصت تمارين المحطة"}</h2><p class="muted">${lit?"يلا على المحطة الجاية.":"هلأ وقت الكويز: نجمتين أو أكثر بيضوّوا فانوس المهارة."}</p>
       <div class="row" style="justify-content:center"><a class="btn btn-go" href="#quiz-${sid}">${quizOf(S,sid)?"أعد كويز المهارة":"كويز المهارة"}</a>${lit&&currentSkill()?`<a class="btn btn-line" href="#skill-${currentSkill().id}">المحطة الجاية</a>`:`<button class="btn btn-line" id="again" type="button">أعد التمارين</button>`}<a class="btn btn-line" href="#path">مساري</a></div></div>`:
     `<div class="puzzle">
       <div class="row between"><span class="ptype"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${TYPE_IC[q.type]}</svg>${TYPE_NAME[q.type]} · تمرين ${P.i+1} من ${P.qs.length}</span>
@@ -1436,7 +1431,6 @@ function pick(val,btn,placedIdx){
   if(r.ok){
     P.state="right";P.tilt=0;
     if(P.first){S.streak[sid]=(S.streak[sid]||0)+1;spark(btn,"✦");beep("ding");}else{S.streak[sid]=0;beep("ding");}
-    if(!S.lit[sid]&&S.streak[sid]>=MASTER_STREAK){save();vSkill(sid);markLit(sid);return;}
   }else{
     if(q.type==="bubbles")P.tried.push(val);
     P.first=false;P.state="hint";P.fb=r;if(r.mis)bump(r.mis);S.streak[sid]=0;beep("soft");
