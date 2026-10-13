@@ -627,7 +627,7 @@ function vLanding(){
       <svg class="nb-path" viewBox="0 0 1200 520" preserveAspectRatio="none" aria-hidden="true"><path d="M1180 60 C 960 40, 900 300, 700 260 S 360 420, 40 470"/></svg>
       <div class="nb-hero-text">
         <p class="nb-kicker">${NB_BULB}<span>نبراس · تعلّم من مستواك</span></p>
-        <h1 id="nb-h1">مش فاهم درس؟<br><span class="hl">خلّينا نرجع خطوة… ونكمّل مع بعض.</span></h1>
+        <h1 id="nb-h1">بالرياضيات، كل درس مبني على اللي قبله.<br><span class="hl">نبراس بيلاقي وين وقفت، وبتكمّل من هناك.</span></h1>
         <p class="nb-lead">نبراس منصة ذكية تساعدك تكتشف الفجوة اللي وقفت عندها في الرياضيات، وتبني طريقك من مستواك أنت.</p>
         <div class="nb-cta">
           <a class="btn btn-go" href="#auth-student">ابدأ رحلة التعلّم</a>
@@ -687,9 +687,9 @@ function vLanding(){
         <article class="nb-plan main">
           <span class="nb-plan-badge">لأولياء الأمور</span>
           <h3>اشتراك الطالب</h3>
-          <p class="nb-price"><b>21</b><span>₪</span><small>شهريًا لكل طالب<br>(حوالي 6.89 دولار)</small></p>
+          <p class="nb-price"><b>22</b><span>₪</span><small>شهريًا لكل طالب<br>(حوالي 7.18 دولار)</small></p>
           <ul>
-            <li>رحلة التشخيص كاملة على الجزر الثلاث</li>
+            <li>رحلة التشخيص كاملة: 24 لغز من الصف الثالث للسابع</li>
             <li>مسار التعلّم بمهارات من الصف ${LEVELS[0].short} إلى ${LEVELS[LEVELS.length-1].short}، محطة ورا محطة</li>
             <li>«اسأل نبراس» حتى ${DAILY_LIMIT} رسالة يوميًا</li>
             <li>صفحة الأهالي مع تقرير التشخيص وإشعار عند كل مرحلة</li>
