@@ -697,9 +697,9 @@ function vLanding(){
           <a class="btn btn-go" href="#auth-parent">أنشئ حساب وليّ أمر</a>
         </article>
         <article class="nb-plan">
-          <span class="nb-plan-badge alt">للمدارس والمديريات</span>
-          <h3>اشتراك المدرسة</h3>
-          <p class="nb-price ask"><b>بالاتفاق</b><small>يُحدَّد السعر بعد الحديث مع المدرسة أو المديرية</small></p>
+       <span class="nb-plan-badge alt">للمدارس والمؤسسات الداعمة</span>
+         <h3>اشتراك المدرسة</h3>
+          <p class="nb-price ask"><b>بالاتفاق</b><small>يُحدَّد السعر بعد الحديث مع المدرسة أو المؤسسة الداعمة</small></p>
           <ul>
             <li>حسابات لطلبة الصف السابع في المدرسة</li>
             <li>مساعد المعلّم لفهم سبب خطأ الطالب وطريقة العلاج</li>
